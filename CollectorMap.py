@@ -33,10 +33,44 @@ ARCHIVE_COLLECTORS = {
         ),
     },
     2019: {
+        Month.JANUARY: ArchiveCopier(
+            folder_root=Path(r'I:\Train\Report Data\2019 Data\2019_01_January'),
+            file_name='2018_01_ProviderData_All',
+            file_sheet=None,
+        ),
         Month.FEBRUARY: ArchiveCopier(
             folder_root=Path(r'I:\Train\Report Data\2019 Data\2019_02_February'),
             file_name='2019_02_ProviderALLDATA',
             file_sheet='freedmanc@47100'
+        ),
+        Month.MARCH: ArchiveCopier(
+            folder_root=Path(r'I:\Train\Report Data\2019 Data\2019_03_March'),
+            file_name='2019_03_ProviderData_V2',
+            file_sheet='Sheet1',
+        ),
+        Month.APRIL: ArchiveCopier(
+            folder_root=Path(r'I:\Train\Report Data\2019 Data\2019_04_April'),
+            file_name='2019_04_PDR_All_Import',
+            file_sheet=None,
+        ),
+        Month.MAY: ArchiveCopier(
+            folder_root=Path(r'I:\Train\Report Data\2019 Data\2019_05_May'),
+            file_name='2019_05_NW_Provider_All',
+            file_sheet=None,
+        ),
+        Month.JUNE: ArchiveCopier(
+            folder_root=Path(r'I:\Train\Report Data\2019 Data\2019_06_June'),
+            file_name='2019_06_June_PDR_All_WithCorrections',
+            file_sheet=None,
+        ),
+        Month.JULY: ArchiveComposer(
+            folder_root=Path(r'I:\Train\Report Data\2019 Data\2019_07_July'),
+            general_file='2019_07_NW_PRovider_General',
+            general_sheet=None,
+            care_center_file='2019_07_NW_Provider_CareCenter',
+            care_center_sheet=None,
+            address_file='2019_07_NW_Provider_Address',
+            address_sheet=None
         ),
         Month.AUGUST: ArchiveComposer(
             folder_root=Path(r'I:\Train\Report Data\2019 Data\2019_08_August'),
@@ -46,6 +80,30 @@ ARCHIVE_COLLECTORS = {
             care_center_sheet='freedmanc@47100-CARE_CENTER',
             address_file='2019_08_freedmanc@47100-ADDRESS',
             address_sheet=None
+        ),
+        Month.SEPTEMBER: ArchiveComposer(
+            folder_root=Path(r'I:\Train\Report Data\2019 Data\2019_09_September'),
+            general_file='2019_09_NW_PDR_General',
+            general_sheet=None,
+            care_center_file='2019_09_NW_PDR_CareCenter',
+            care_center_sheet=None,
+            address_file='2019_09_NW_PDR_Address',
+            address_sheet=None
+        ),
+        Month.OCTOBER: ArchiveCopier(
+            folder_root=Path(r'I:\Train\Report Data\2019 Data\2019_10_October'),
+            file_name='2019_10_NW_PRD_ALLFIELDS',
+            file_sheet=None,
+        ),
+        Month.NOVEMBER: ArchiveCopier(
+            folder_root=Path(r'I:\Train\Report Data\2019 Data\2019_11_November'),
+            file_name='2019_12_01_NW_PDR_AllProvider',
+            file_sheet=None,
+        ),
+        Month.DECEMBER: ArchiveCopier(
+            folder_root=Path(r'I:\Train\Report Data\2019 Data\2019_12_December'),
+            file_name='2019_12_Provider_All_V2_',
+            file_sheet=None,
         ),
     },
     2018: {
