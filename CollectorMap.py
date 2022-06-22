@@ -26,10 +26,74 @@ ARCHIVE_COLLECTORS = {
             file_name='freedmanc@47100_ALL PROVIDER',
             file_sheet='freedmanc@47100_ALL PROVIDER'
         ),
+        Month.FEBRUARY: ArchiveComposer(
+            folder_root=Path(r'I:\Train\Report Data\2020 Data\2020_02_February'),
+            general_file='2020_02_Provider_Genearl',
+            general_sheet=None,
+            care_center_file='2020_02_Provider_CareCenter',
+            care_center_sheet=None,
+            address_file='2020_02_Provider_Address',
+            address_sheet=None
+        ),
+        Month.MARCH: ArchiveComposer(
+            folder_root=Path(r'I:\Train\Report Data\2020 Data\2020_03_March'),
+            general_file='freedmanc@47100-PDRGENERAL',
+            general_sheet=None,
+            care_center_file='freedmanc@47100-CARE_CENTER',
+            care_center_sheet=None,
+            address_file='freedmanc@47100-ADDRESS',
+            address_sheet=None
+        ),
+        Month.APRIL: ArchiveComposer(
+            folder_root=Path(r'I:\Train\Report Data\2020 Data\2020_04_April'),
+            general_file='2020_05_01_Provider_General',
+            general_sheet=None,
+            care_center_file='2020_05_01_Provider_Center',
+            care_center_sheet=None,
+            address_file='2020_05_01_Provider_Address',
+            address_sheet=None
+        ),
+        Month.MAY: ArchiveComposer(
+            folder_root=Path(r'I:\Train\Report Data\2020 Data\2020_05_May'),
+            general_file='freedmanc@47100-PDRGENERAL',
+            general_sheet=None,
+            care_center_file='freedmanc@47100-CARE_CENTER',
+            care_center_sheet=None,
+            address_file='freedmanc@47100-ADDRESS',
+            address_sheet=None
+        ),
+        Month.JUNE: ArchiveComposer(
+            folder_root=Path(r'I:\Train\Report Data\2020 Data\2020_06_June'),
+            general_file='2020_06_30_freedmanc@47100-PDRGENERAL',
+            general_sheet=None,
+            care_center_file='2020_06_30_freedmanc@47100-CARE_CENTER',
+            care_center_sheet=None,
+            address_file='2020_06_30_freedmanc@47100-ADDRESS',
+            address_sheet=None
+        ),
+        Month.JULY: ArchiveCopier(
+            folder_root=Path(r'I:\Train\Report Data\2020 Data\2020_07_July'),
+            file_name='2020_08_03_Provider_All',
+            file_sheet='freedmanc@47100-24',
+        ),
         Month.AUGUST: ArchiveCopier(
             folder_root=Path(r'I:\Train\Report Data\2020 Data\2020_08_August'),
             file_name='2020_08_Provider_ALL',
             file_sheet='freedmanc@47100'
+        ),
+        Month.SEPTEMBER: ArchiveCopier(
+            folder_root=Path(r'I:\Train\Report Data\2020 Data\2020_09_September'),
+            file_name='2020_09_provider_ALLL',
+            file_sheet=None,
+        ),
+        Month.OCTOBER: ArchiveComposer(
+            folder_root=Path(r'I:\Train\Report Data\2020 Data\2020_10_October'),
+            general_file='2020_11_01_Provider_General',
+            general_sheet=None,
+            care_center_file='2020_11_01_Provider_CareCenter',
+            care_center_sheet=None,
+            address_file='2020_11_01_Provider_Address',
+            address_sheet=None
         ),
     },
     2019: {
