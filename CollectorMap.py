@@ -162,12 +162,12 @@ ARCHIVE_COLLECTORS = {
         Month.NOVEMBER: ArchiveCopier(
             folder_root=Path(r'I:\Train\Report Data\2019 Data\2019_11_November'),
             file_name='2019_12_01_NW_PDR_AllProvider',
-            file_sheet=None,
+            file_sheet='2019_12_01_NW_PDR_AllProvider',
         ),
         Month.DECEMBER: ArchiveCopier(
             folder_root=Path(r'I:\Train\Report Data\2019 Data\2019_12_December'),
             file_name='2019_12_Provider_All_V2_',
-            file_sheet=None,
+            file_sheet='2019_12_Provider_All',
         ),
     },
     2018: {
@@ -256,7 +256,7 @@ ARCHIVE_COLLECTORS = {
         ),
         Month.NOVEMBER: ArchiveCopier(
             folder_root=Path(r'I:\Train\Report Data\2018 Data\2018_11_November'),
-            file_name='2018_11_NW_AllProviderData',
+            file_name='2018_11_NW_AllProviderData_2',
             file_sheet=None,
         ),
         Month.DECEMBER: ArchiveCopier(
