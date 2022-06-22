@@ -32,15 +32,22 @@ def collect_year(year):
         return
     print(f'Year {year} not found in ARCHIVE_COLLECTORS dictionary')
 
-def collect(year, month):
+def collect(year, month, overwrite_existing=False):
     if (year in ARCHIVE_COLLECTORS):
         year_dict = ARCHIVE_COLLECTORS[year]
         if (month in year_dict):
-            print(f'{year}-{month.value} Begin')
-            month_start = time.time()
-            year_dict[month].collect(collection_path, f'{year}-{month.value}')
-            month_end = time.time()
-            print(f'{year}-{month.value} End ({month_end - month_start:.3f}s)')
+            file_exists = os.path.isfile(collection_path / f'{year}-{month.value}.xlsx')
+            if (
+                (not file_exists) or
+                (file_exists and overwrite_existing)
+            ):
+                print(f'{year}-{month.value} Begin')
+                month_start = time.time()
+                year_dict[month].collect(collection_path, f'{year}-{month.value}')
+                month_end = time.time()
+                print(f'{year}-{month.value} End ({month_end - month_start:.3f}s)')
+            else:
+                print(f'{year}-{month.value} already present')
             return
     print(f'Year-Month combination {year}-{month.value} not found in ARCHIVE_COLLECTORS dictionary')
     return
@@ -49,7 +56,7 @@ def collector_proc(queue):
     while True:
         msg = queue.get()
         if msg != CollectorSignal.DONE:
-            collect(msg['year'], msg['month'])
+            collect(msg['year'], msg['month'], msg['overwrite'])
         else:
             break
 
@@ -72,7 +79,8 @@ if __name__ == '__main__':
         for month in ARCHIVE_COLLECTORS[year]:
             msg = {
                 'year': year,
-                'month': month
+                'month': month,
+                'overwrite': False,
             }
             proc_queue.put(msg)
     # Create the procs
