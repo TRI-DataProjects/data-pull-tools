@@ -1,4 +1,4 @@
-from multiprocessing import Process, Queue, Pool
+from multiprocessing import Pool
 import os
 import sys
 import time
@@ -57,7 +57,7 @@ if __name__ == '__main__':
     with Pool() as pool:
         dfs = pool.starmap(collect_with_stats, targets)
     end_time = time.time()
-    print(f"Completed collection in {end_time-start_time:.3f}s")
+    print(f'Completed collection in {end_time-start_time:.3f}s')
 
     data = pd.concat(dfs, ignore_index=True)
     data.to_csv(collection_path / 'column_stats.csv', index=False)
