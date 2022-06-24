@@ -11,3 +11,7 @@ if (-not (Test-Path -PathType Container -Path $VENV_DIR)) {
 
 python -m pip install --upgrade pip
 python -m pip install -r requirements.txt
+
+# Upgrade all
+# pip freeze | %{$_.split('==')[0]} | %{pip install --upgrade $_}
+# pip freeze > requirements.txt
