@@ -9,6 +9,7 @@ class SpinnerStatus(Enum):
     STOPPING = 2
     STOPPED = 3
 
+
 class APromptSpinner(ABC):
     def __init__(self):
         self.status = SpinnerStatus.STOPPED
@@ -35,7 +36,7 @@ class APromptSpinner(ABC):
             self.step()
             time.sleep(self.delay)
         return
-    
+
     def start_spin(self, message):
         self.prompt_message = message
         self.status = SpinnerStatus.SPINNING
@@ -49,6 +50,7 @@ class APromptSpinner(ABC):
         self.final()
         return
 
+
 class DotsSpinner(APromptSpinner):
     def __init__(self):
         super().__init__()
@@ -57,18 +59,18 @@ class DotsSpinner(APromptSpinner):
         return
 
     def prompt(self):
-        dots = ' .' * self.cur_step
-        blanks = '  ' * (self.max_dots - self.cur_step - 1)
-        print(f'\r{self.prompt_message}{dots}{blanks} ', end='')
+        dots = " ." * self.cur_step
+        blanks = "  " * (self.max_dots - self.cur_step - 1)
+        print(f"\r{self.prompt_message}{dots}{blanks} ", end="")
         return
 
     def step(self):
-        self.cur_step = ((self.cur_step + 1) % (self.max_dots))
+        self.cur_step = (self.cur_step + 1) % (self.max_dots)
         return
 
     def final(self):
-        dots = ' .' * (self.max_dots - 1)
-        print(f'\r{self.prompt_message}{dots} ', end='')
+        dots = " ." * (self.max_dots - 1)
+        print(f"\r{self.prompt_message}{dots} ", end="")
         self.cur_step = 0
         self.status = SpinnerStatus.STOPPED
         return
