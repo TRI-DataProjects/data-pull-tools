@@ -29,11 +29,11 @@ def collect_with_stats(
     progress: DictProxy,
     sub_task_id: TaskID,
     overwrite_existing: bool = False,
-):
+) -> None:
     if year in ARCHIVE_COLLECTORS:
         year_dict = ARCHIVE_COLLECTORS[year]
         if month in year_dict:
-            file_exists = os.path.isfile(collection_path / f"{year}-{month.value}.xlsx")
+            file_exists = os.path.isfile(collection_path / f"{year}-{month.value}.csv")
             _upd = progress[sub_task_id]
             if (not file_exists) or (file_exists and overwrite_existing):
                 # Collected file does not exist
@@ -54,8 +54,8 @@ def collect_with_stats(
                 progress[sub_task_id] = _upd
 
                 # Read in the columns of the archived month's data
-                month_df = pd.read_excel(
-                    str(collection_path / (f"{year}-{month.value}.xlsx")), nrows=0
+                month_df = pd.read_csv(
+                    str(collection_path / (f"{year}-{month.value}.csv")), nrows=0
                 )
                 _upd["completed"] = 1
                 progress[sub_task_id] = _upd
@@ -70,14 +70,10 @@ def collect_with_stats(
             )
             progress[sub_task_id] = _upd
 
-
-if __name__ == "__main__":
-
+def __main__(overwrite: bool=False) -> None:
     collection_path = Path(os.path.dirname(os.path.realpath(sys.argv[0]))) / "collected"
     if not os.path.isdir(collection_path):
         os.mkdir(collection_path)
-
-    overwrite = True
 
     with Progress(
         SpinnerColumn(),
@@ -163,3 +159,18 @@ if __name__ == "__main__":
 
             if data is not None:
                 data.to_csv(collection_path / "_column_stats.csv", index=False)
+
+if __name__ == "__main__":
+    debug = True
+    # Run fast and loose, let errors fly
+    if debug:
+        __main__()
+    # Run "safely", always exit "gracefully"
+    else:
+        rc = 1
+        try:
+            rc = 0
+            __main__()
+        except Exception as e:
+            print(f"Error: {e}", file=sys.stderr)
+        sys.exit(rc)

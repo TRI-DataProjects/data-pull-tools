@@ -77,7 +77,7 @@ class ArchiveComposer(ArchiveCollector):
         _upd["completed"] = steps_done
         progress[sub_task_id] = _upd
 
-        merged.to_excel(out_dir / (out_file + ".xlsx"), index=False)
+        merged.to_csv(out_dir / (out_file + ".csv"), index=False)
         steps_done += 1
         _upd["completed"] = steps_done
         progress[sub_task_id] = _upd
@@ -108,7 +108,7 @@ class ArchiveCopier(ArchiveCollector):
         _upd["completed"] = steps_done
         progress[sub_task_id] = _upd
 
-        all_data.to_excel(out_dir / (out_file + ".xlsx"), index=False)
+        all_data.to_csv(out_dir / (out_file + ".csv"), index=False)
         steps_done += 1
         _upd["completed"] = steps_done
         progress[sub_task_id] = _upd
