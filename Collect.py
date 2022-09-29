@@ -164,7 +164,7 @@ if __name__ == "__main__":
     debug = True
     # Run fast and loose, let errors fly
     if debug:
-        __main__()
+        __main__(True)
     # Run "safely", always exit "gracefully"
     else:
         rc = 1

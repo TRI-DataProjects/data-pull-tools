@@ -20,6 +20,13 @@ class Month(Enum):
 
 
 ARCHIVE_COLLECTORS = {
+    2021: {
+        Month.AUGUST: ArchiveCopier(
+            folder_root=Path(r"I:\Train\Report Data\2021 Data\2021_08_August"),
+            file_name="Program Search Results - (08-31-2021)",
+            file_sheet="Search Results",
+        ),
+    },
     2020: {
         Month.JANUARY: ArchiveCopier(
             folder_root=Path(r"I:\Train\Report Data\2020 Data\2020_01_January"),

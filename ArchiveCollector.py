@@ -19,6 +19,52 @@ class ArchiveCollector(ABC):
         else:
             return pd.read_excel(file_path, sheet_name).convert_dtypes()
 
+    def clean_columns(self, collected: pd.DataFrame):
+        if all(
+            w in collected.columns
+            for w in [
+                "Provider Unique ID",
+                "Provider UID",
+            ]
+        ):
+            collected.drop("License Type", axis=1, inplace=True)
+            collected.rename(
+                columns={
+                    "Licensure": "License Type",
+                    "Total Desired Capacity": "Desired Capacity",
+                    "Total Licensed Capacity": "Licensed Capacity",
+                    "Total Vacancies": "Total Openings",
+                },
+                inplace=True,
+            )
+
+            check_columns = ["Funding", "Organized Structure", "Business Name"]
+            fin_mask = None
+            for column in check_columns:
+                if column in collected.columns:
+                    upper = collected[column].str.upper()
+                    head_start_mask = pd.Series(
+                        (upper.str.find("HEADSTART") >= 0)
+                        | (upper.str.find("HEAD START") >= 0)
+                    )
+                    if fin_mask is None:
+                        fin_mask = head_start_mask
+                    else:
+                        fin_mask |= head_start_mask
+            if fin_mask is not None and "Program Types" not in collected.columns:
+                collected["Program Types"] = ""
+                collected.loc[fin_mask, "Program Types"] = "Head Start (OPK)"
+
+        if "License Type" in collected.columns:
+            collected["License Type"] = (
+                (collected["License Type"]).str.split(",", n=1).str.strip()
+            )
+
+            fin_mask = collected["License Type"] == "Unlicensed - TBD (School Partners)"
+            (collected[fin_mask])["License Type"] = "Unlicensed - Exempt"
+        
+        return collected.copy()
+
 
 class ArchiveComposer(ArchiveCollector):
     def __init__(
@@ -65,8 +111,10 @@ class ArchiveComposer(ArchiveCollector):
         _upd["completed"] = steps_done
         progress[sub_task_id] = _upd
 
-        merged = general.merge(care_center, on="Provider UID", how="left").merge(
-            address, on="Provider UID", how="left"
+        merged = general.merge(care_center, on="Provider UID", how="left",).merge(
+            address,
+            on="Provider UID",
+            how="left",
         )
         steps_done += 1
         _upd["completed"] = steps_done
@@ -76,6 +124,8 @@ class ArchiveComposer(ArchiveCollector):
         steps_done += 1
         _upd["completed"] = steps_done
         progress[sub_task_id] = _upd
+
+        merged = self.clean_columns(merged)
 
         merged.to_csv(out_dir / (out_file + ".csv"), index=False)
         steps_done += 1
@@ -107,6 +157,8 @@ class ArchiveCopier(ArchiveCollector):
         steps_done += 1
         _upd["completed"] = steps_done
         progress[sub_task_id] = _upd
+
+        all_data = self.clean_columns(all_data)
 
         all_data.to_csv(out_dir / (out_file + ".csv"), index=False)
         steps_done += 1
