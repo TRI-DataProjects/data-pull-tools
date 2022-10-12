@@ -1,18 +1,15 @@
+import re
 from abc import ABC, abstractmethod
 from collections import defaultdict
-from email.headerregistry import Group
-import re
 from re import Match
-from tokenize import group
-from typing import Callable, Tuple
+from typing import Callable
 
-import numpy as np
 import pandas as pd
 
 
 class StackInferrer(ABC):
     @abstractmethod
-    def infer_stack(self, df: pd.DataFrame, max_depth: int):
+    def infer_stack(self, df: pd.DataFrame, max_depth: int) -> pd.DataFrame | pd.Series:
         ...
 
 
@@ -33,70 +30,119 @@ class CleaningInferrer(StackInferrer):
         if isinstance(df, pd.Series):
             return df
 
-        if not isinstance(df.columns, pd.MultiIndex):
-            index_cols: list[int] = list()
-
-            pattern = self._pattern
-            repl = self._repl
-
-            cols_list = df.columns.to_list()
-            if pattern is not None:
-                cols_list = [pattern.sub(repl, x) for x in cols_list]
-            cols_df = pd.DataFrame([cols_list], columns=cols_list)
-
-            # Look for header rows
-            header_rows = -1
-            while True:
-                header_rows += 1
-                if df.iloc[header_rows, 0] != cols_list[0]:
-                    break
-
-            pivot_rows = header_rows + 1
-            if pivot_rows > max_depth:
-                pivot_rows = max_depth
-
-            # Use headers to determin index columns
-            if header_rows > 0:
-                headers = df.iloc[0:header_rows, :]
-                if pattern is not None:
-                    headers = headers.applymap(lambda x: pattern.sub(self._repl, x))
-
-                headers.columns = cols_df.columns
-                cols_df = pd.concat([cols_df, headers])
-
-                for idx in range(0, len(cols_list)):
-                    data = cols_list[idx]
-                    column = headers.iloc[:, idx]
-                    col_matches = True
-                    for row in column:
-                        if data != row:
-                            col_matches = False
-                            break
-
-                    if col_matches:
-                        index_cols.append(idx)
-
-            # Determine index columns based on repeat column names
-            else:
-                tally = defaultdict(list)
-                for i, item in enumerate(cols_list):
-                    tally[item].append(i)
-
-                for locs in tally.values():
-                    if len(locs) == 1:
-                        index_cols.append(locs[0])
-
-            # Create a multi-index if necessary
-            if len(cols_df.index) > 1:
-                cols_df = cols_df.set_index(list(cols_df.columns[index_cols]))  # type: ignore
-                df = df.iloc[header_rows:, :]
-                df = df.set_index(list(df.columns[index_cols]))  # type: ignore
-                zipped = zip(*cols_df.values)
-                df.columns = pd.MultiIndex.from_tuples(zipped)
-        else:
+        # If df's Column is already a MultiIndexs stacking is easy
+        if isinstance(df.columns, pd.MultiIndex):
             pivot_rows = min(df.columns.nlevels, max_depth)
+        else:
+            df, pivot_rows = self._infer_column_index(df, max_depth)
 
         return df.stack(list(range(0, pivot_rows)))  # type: ignore
+
+    def _infer_column_index(
+        self,
+        df: pd.DataFrame,
+        max_depth: int,
+    ) -> tuple[pd.DataFrame, int]:
+        index_cols: list[int]
+
+        pattern = self._pattern
+        repl = self._repl
+
+        # Clean column names
+        cols_list = df.columns.to_list()
+        if pattern is not None:
+            cols_list = [pattern.sub(repl, x) for x in cols_list]
+        cols_df = pd.DataFrame([cols_list], columns=cols_list)
+
+        # Look for header rows
+        pivot_rows, header_rows = self._find_header_rows(df, max_depth, cols_list)
+
+        # Use headers to determine index columns
+        if header_rows > 0:
+            cols_df, index_cols = self._index_columns_from_header_rows(
+                df,
+                cols_df,
+                cols_list,
+                header_rows,
+            )
+
+        # Determine index columns based on repeat column names
+        else:
+            index_cols = self._index_columns_from_repeat_columns(cols_list)
+
+        # Create a multi-index if necessary
+        if len(cols_df.index) > 1:
+            cols_df = cols_df.set_index(list(cols_df.columns[index_cols]))  # type: ignore
+            cols_mi = pd.MultiIndex.from_tuples(zip(*cols_df.values))
+
+            df = df.iloc[header_rows:, :]
+            df = df.set_index(list(df.columns[index_cols]))  # type: ignore
+            df.columns = cols_mi
+        return df, pivot_rows  # type: ignore
+
+    def _index_columns_from_repeat_columns(self, cols_list: list) -> list[int]:
+        index_cols: list[int] = list()
+
+        # Tally column names
+        tally = defaultdict(int)
+        for item in cols_list:
+            tally[item] += 1
+
+            # Append the locations with only one item
+        for col, count in tally.items():
+            if count == 1:
+                index_cols.append(col)
+
+        return index_cols
+
+    def _index_columns_from_header_rows(
+        self,
+        df: pd.DataFrame,
+        cols_df: pd.DataFrame,
+        cols_list: list,
+        header_rows: int,
+    ):
+
+        pattern = self._pattern
+        repl = self._repl
+        index_cols: list[int] = list()
+
+        headers = df.iloc[0:header_rows, :]
+        if pattern is not None:
+            headers = headers.applymap(lambda x: pattern.sub(repl, x))
+
+        headers.columns = cols_df.columns
+        cols_df = pd.concat([cols_df, headers])
+
+        for idx in range(0, len(cols_list)):
+            data = cols_list[idx]
+            column = headers.iloc[:, idx]
+            col_matches = True
+            for row in column:
+                if data != row:
+                    col_matches = False
+                    break
+
+            if col_matches:
+                index_cols.append(idx)
+        return cols_df, index_cols
+
+    def _find_header_rows(
+        self,
+        df: pd.DataFrame,
+        max_depth: int,
+        cols_list: list,
+    ):
+        header_rows = -1
+        while True:
+            header_rows += 1
+            if df.iloc[header_rows, 0] != cols_list[0]:
+                break
+
+        pivot_rows = header_rows + 1
+        if pivot_rows > max_depth:
+            pivot_rows = max_depth
+        return pivot_rows, header_rows  # type: ignore
 
 
 class ExcelInferrer(CleaningInferrer):
