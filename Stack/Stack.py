@@ -16,7 +16,7 @@ class StackInferrer(ABC):
 class CleaningInferrer(StackInferrer):
     def __init__(
         self,
-        pattern: str | re.Pattern[str] | None = None,
+        pattern: str | re.Pattern[str] | None = r"\.\d+$",
         repl: str | Callable[[Match[str]], str] = "",
     ) -> None:
         if isinstance(pattern, str):
@@ -101,22 +101,23 @@ class CleaningInferrer(StackInferrer):
         cols_df: pd.DataFrame,
         cols_list: list,
         header_rows: int,
-    ):
+    ) -> tuple[pd.DataFrame, list[int]]:
 
         pattern = self._pattern
         repl = self._repl
         index_cols: list[int] = list()
 
         headers = df.iloc[0:header_rows, :]
-        if pattern is not None:
-            headers = headers.applymap(lambda x: pattern.sub(repl, x))
-
         headers.columns = cols_df.columns
         cols_df = pd.concat([cols_df, headers])
+        cols_df = cols_df.ffill(axis=0)
+
+        if pattern is not None:
+            cols_df = cols_df.applymap(lambda x: pattern.sub(repl, x))
 
         for idx in range(0, len(cols_list)):
             data = cols_list[idx]
-            column = headers.iloc[:, idx]
+            column = cols_df.iloc[:, idx]
             col_matches = True
             for row in column:
                 if data != row:
@@ -132,24 +133,21 @@ class CleaningInferrer(StackInferrer):
         df: pd.DataFrame,
         max_depth: int,
         cols_list: list,
-    ):
+    ) -> tuple[int, int]:
         header_rows = -1
         while True:
             header_rows += 1
-            if df.iloc[header_rows, 0] != cols_list[0]:
+            data = df.iat[header_rows, 0]
+            if (
+                data == data  # Value is not NaN (NaN == NaN returns false)
+                and data != cols_list[0]
+            ):
                 break
 
         pivot_rows = header_rows + 1
         if pivot_rows > max_depth:
             pivot_rows = max_depth
         return pivot_rows, header_rows  # type: ignore
-
-
-class ExcelInferrer(CleaningInferrer):
-    def __init__(
-        self,
-    ) -> None:
-        super().__init__(r"\.\d+$", "")
 
 
 if __name__ == "__main__":
@@ -204,7 +202,7 @@ if __name__ == "__main__":
     print("Original:")
     print(df)
     print("Inferred:")
-    inferrer = ExcelInferrer()
+    inferrer = CleaningInferrer()
 
     stack0 = inferrer.infer_stack(df, 0)
     print(stack0)
@@ -217,3 +215,6 @@ if __name__ == "__main__":
     # returns the series unchanged
     stack3 = inferrer.infer_stack(stack2, 1)
     print(stack3)
+    s0_reset = stack0.reset_index()
+    print(s0_reset)
+    s0_reset.to_csv("test.csv", index=False)
