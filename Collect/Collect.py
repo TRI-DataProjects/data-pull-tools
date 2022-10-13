@@ -70,7 +70,8 @@ def collect_with_stats(
             )
             progress[sub_task_id] = _upd
 
-def __main__(overwrite: bool=False) -> None:
+
+def __main__(overwrite: bool = False) -> None:
     collection_path = Path(os.path.dirname(os.path.realpath(sys.argv[0]))) / "collected"
     if not os.path.isdir(collection_path):
         os.mkdir(collection_path)
@@ -158,7 +159,37 @@ def __main__(overwrite: bool=False) -> None:
                     data = pd.concat([data, df], ignore_index=True)
 
             if data is not None:
+                df: pd.DataFrame = data.copy()
+                cols = df.columns.to_list()
+                df["Appear"] = 1
+                df = df.set_index(cols)
+                df = df.unstack(1).unstack(1).droplevel(0, axis=1)  # type: ignore
+
+                year_totals = df.groupby(df.columns.get_level_values(0), axis=1).sum()
+                year_totals.columns = pd.MultiIndex.from_tuples(
+                    [(year, "Total") for year in list(year_totals.columns)]
+                )
+                pivot = df.join(year_totals)
+
+                years = list(pivot.columns.levels[0])  # type: ignore
+                pivot = pivot.reindex(years, axis=1, level=0)
+
+                months = list(pivot.columns.levels[1])  # type: ignore
+                pivot = pivot.reindex(months, axis=1, level=1)
+
+                row_totals = pd.DataFrame(
+                    df.sum(axis=1),
+                    columns=pd.MultiIndex.from_tuples([("Total", "Total")]),
+                )
+
+                pivot = pivot.join(row_totals).sort_index(axis=1)
+
+                row_sum = pd.DataFrame(pivot.sum(axis=0), columns=["Total"])
+                pivot = pd.concat([pivot, row_sum.T])
+
                 data.to_csv(collection_path / "_column_stats.csv", index=False)
+                pivot.to_csv(collection_path / "_column_stats_pivot.csv")
+
 
 if __name__ == "__main__":
     debug = True
