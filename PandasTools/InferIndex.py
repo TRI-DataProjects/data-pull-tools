@@ -47,54 +47,52 @@ class CleaningInferrer(IndexInferrer):
         if pattern is not None:
             cols_list = [pattern.sub(repl, x) for x in cols_list]
             df.columns = cols_list  # type: ignore
-        cols_df = pd.DataFrame([cols_list], columns=cols_list)
 
         # Look for header rows
         header_rows = self._find_header_rows(df, cols_list)
 
+        # Determine index columns based on repeat column names
+        if header_rows == 0:
+            index_cols = self._index_columns_from_repeat_column_names(cols_list)
+            df = df.set_index(list(df.columns[index_cols]))  # type: ignore
+
         # Use headers to determine index columns
-        if header_rows > 0:
+        else:
             cols_df, index_cols = self._index_columns_from_header_rows(
                 df,
-                cols_df,
                 cols_list,
                 header_rows,
             )
 
-        # Determine index columns based on repeat column names
-        else:
-            index_cols = self._index_columns_from_repeat_columns(cols_list)
+            # Create a multi-index if necessary
+            if len(cols_df.index) > 1:
+                cols_df = cols_df.set_index(list(cols_df.columns[index_cols]))  # type: ignore
+                cols_mi = pd.MultiIndex.from_tuples(zip(*cols_df.values))
 
-        # Create a multi-index if necessary
-        if len(cols_df.index) > 1:
-            cols_df = cols_df.set_index(list(cols_df.columns[index_cols]))  # type: ignore
-            cols_mi = pd.MultiIndex.from_tuples(zip(*cols_df.values))
-
-            df = df.iloc[header_rows:, :]
-            df = df.set_index(list(df.columns[index_cols]))  # type: ignore
-            df.columns = cols_mi
+                df = df.iloc[header_rows:, :]
+                df = df.set_index(list(df.columns[index_cols]))  # type: ignore
+                df.columns = cols_mi
 
         return df  # type: ignore
 
-    def _index_columns_from_repeat_columns(self, cols_list: list) -> list[int]:
+    def _index_columns_from_repeat_column_names(self, cols_list: list) -> list[int]:
         index_cols: list[int] = list()
 
         # Tally column names
-        tally = defaultdict(int)
-        for item in cols_list:
-            tally[item] += 1
+        tally = defaultdict(list)
+        for i, item in enumerate(cols_list):
+            tally[item].append(i)
 
-            # Append the locations with only one item
-        for col, count in tally.items():
-            if count == 1:
-                index_cols.append(col)
+        # Append the locations with only one item
+        for locs in tally.values():
+            if len(locs) == 1:
+                index_cols.append(locs[0])
 
         return index_cols
 
     def _index_columns_from_header_rows(
         self,
         df: pd.DataFrame,
-        cols_df: pd.DataFrame,
         cols_list: list,
         header_rows: int,
     ) -> tuple[pd.DataFrame, list[int]]:
@@ -102,6 +100,8 @@ class CleaningInferrer(IndexInferrer):
         pattern = self._pattern
         repl = self._repl
         index_cols: list[int] = list()
+
+        cols_df = pd.DataFrame([cols_list], columns=cols_list)
 
         headers = df.iloc[0:header_rows, :]
         headers.columns = cols_df.columns
@@ -143,58 +143,16 @@ class CleaningInferrer(IndexInferrer):
 
 
 if __name__ == "__main__":
-    col = [
-        "Company",
-        "Year 1",
-        "Year 1.1",
-        "Year 1.2",
-        "Year 1.3",
-        "Year 2",
-        "Year 2.1",
-        "Year 2.2",
-        "Year 2.3",
-        "Year 3",
-        "Year 3.1",
-        "Year 3.2",
-        "Year 3.3",
-        "Year 4",
-        "Year 4.1",
-        "Year 4.2",
-        "Year 4.3",
-    ]
+    import _ExampleDataSets as eds
 
-    data = [
-        [
-            "Company",
-            "Q1",
-            "Q2",
-            "Q3",
-            "Q4",
-            "Q1",
-            "Q2",
-            "Q3",
-            "Q4",
-            "Q1",
-            "Q2",
-            "Q3",
-            "Q4",
-            "Q1",
-            "Q2",
-            "Q3",
-            "Q4",
-        ],
-        ["Lesch Ltd", 21, 10, 77, 58, 58, 95, 96, 45, 84, 73, 12, 87, 43, 50, 86, 24],
-        ["Ratke Ltd", 60, 56, 89, 66, 76, 35, 41, 49, 19, 63, 47, 83, 53, 69, 99, 95],
-        ["Willms", 98, 25, 74, 28, 87, 13, 99, 51, 52, 39, 30, 75, 14, 70, 78, 61],
-        ["InaVerit", 64, 39, 67, 89, 60, 15, 63, 16, 45, 67, 46, 15, 10, 00, 49, 41],
-    ]
-
-    df = pd.DataFrame(data, columns=col)
+    df = eds.company_quarterly_df
 
     print("Original:")
     print(df)
-    print("Inferred:")
-    inferrer = CleaningInferrer()
 
+    print()
+
+    inferrer = CleaningInferrer()
     inferred = inferrer.infer_index(df)
+    print("Inferred:")
     print(inferred)
