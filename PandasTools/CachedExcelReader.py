@@ -75,11 +75,15 @@ class CachedExcelReader:
                 df.to_parquet(cache_file)
             elif self.cache_type == CacheType.CSV:
                 df.to_csv(cache_file, index=False)
+            else:
+                raise NotImplementedError(f"{self.cache_type} is not a supported CacheType")
         else:
             if self.cache_type == CacheType.PARQUET:
                 df = pd.read_parquet(cache_file)
             elif self.cache_type == CacheType.CSV:
                 df = pd.read_csv(cache_file)
+            else:
+                raise NotImplementedError(f"{self.cache_type} is not a supported CacheType")
 
         return df.copy()
 
