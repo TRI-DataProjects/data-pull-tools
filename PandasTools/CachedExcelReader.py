@@ -1,8 +1,14 @@
 import errno
 import os
+from enum import Enum
 from pathlib import Path
 
 import pandas as pd
+
+
+class CacheType(Enum):
+    CSV = ".csv"
+    PARQUET = ".parquet"
 
 
 class CachedExcelReader:
@@ -10,6 +16,7 @@ class CachedExcelReader:
         self,
         root_dir: Path | str,
         cache_dir: Path | str | None = ".cache",
+        cache_type: CacheType = CacheType.PARQUET,
     ) -> None:
 
         # Handle root_dir
@@ -34,24 +41,48 @@ class CachedExcelReader:
 
         self.root_dir = root_dir
         self.cache_dir = cache_dir
+        self.cache_type = cache_type
 
     def read_excel(
         self,
         file_name: str,
         sheet: str | int = 0,
-        csv_suffix: str | None = None,
+        cache_suffix: str | None = None,
+        header: int | list[int] | None = 0,
+        index_col: int | list[int] | None = None,
     ) -> pd.DataFrame | pd.Series:
 
-        xlsx_file = str(self.root_dir / (file_name + "xlsx"))
-        csv_file_name = file_name + csv_suffix if csv_suffix is not None else file_name
-        csv_file = str(self.cache_dir / (csv_file_name + ".csv"))
+        xlsx_file = str(self.root_dir / (file_name + ".xlsx"))
+        cache_file_name = (
+            file_name + cache_suffix if cache_suffix is not None else file_name
+        )
+        cache_file = str(self.cache_dir / (cache_file_name + self.cache_type.value))
 
-        if not os.path.exists(csv_file) or (
-            os.path.getmtime(xlsx_file) > os.path.getmtime(csv_file)
+        if not os.path.exists(cache_file) or (
+            os.path.getmtime(xlsx_file) > os.path.getmtime(cache_file)
         ):
-            df = pd.read_excel(xlsx_file, sheet)
-            df.to_csv(csv_file)
+            df = pd.read_excel(
+                xlsx_file,
+                sheet_name=sheet,
+                header=header,
+                index_col=index_col,
+            )
+            if self.cache_type == CacheType.PARQUET:
+                # Convert object dtypes to str
+                df = df.convert_dtypes()
+                obj_cols = df.select_dtypes(include="object").columns
+                df[obj_cols] = df[obj_cols].astype(str)
+                df.to_parquet(cache_file)
+            elif self.cache_type == CacheType.CSV:
+                df.to_csv(cache_file, index=False)
         else:
-            df = pd.read_csv(csv_file)
+            if self.cache_type == CacheType.PARQUET:
+                df = pd.read_parquet(cache_file)
+            elif self.cache_type == CacheType.CSV:
+                df = pd.read_csv(cache_file)
 
         return df.copy()
+
+
+if __name__ == "__main__":
+    ...
