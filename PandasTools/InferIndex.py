@@ -24,7 +24,7 @@ class CleaningInferrer(IndexInferrer):
         self._pattern = pattern
         self._repl = repl
 
-    def infer_index(self, df: pd.DataFrame) -> pd.DataFrame | pd.Series:
+    def infer_index(self, df: pd.DataFrame | pd.Series) -> pd.DataFrame | pd.Series:
 
         # Bail early if it's a series by mistake!
         # Cannot infer index from a MultiIndex
@@ -33,10 +33,8 @@ class CleaningInferrer(IndexInferrer):
 
         return self._infer_column_index(df)  # type: ignore
 
-    def _infer_column_index(
-        self,
-        df: pd.DataFrame,
-    ) -> tuple[pd.DataFrame, int]:
+    def _infer_column_index(self, df: pd.DataFrame) -> pd.DataFrame:
+
         index_cols: list[int]
 
         pattern = self._pattern
@@ -54,6 +52,9 @@ class CleaningInferrer(IndexInferrer):
         # Determine index columns based on repeat column names
         if header_rows == 0:
             index_cols = self._index_columns_from_repeat_column_names(cols_list)
+            if len(df.columns) == len(index_cols):
+                # No header rows and all columns unique
+                return df
             df = df.set_index(list(df.columns[index_cols]))  # type: ignore
 
         # Use headers to determine index columns
@@ -73,7 +74,7 @@ class CleaningInferrer(IndexInferrer):
                 df = df.set_index(list(df.columns[index_cols]))  # type: ignore
                 df.columns = cols_mi
 
-        return df  # type: ignore
+        return df
 
     def _index_columns_from_repeat_column_names(self, cols_list: list) -> list[int]:
         index_cols: list[int] = list()
