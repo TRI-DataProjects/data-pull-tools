@@ -1,14 +1,75 @@
 import errno
 import os
-from enum import Enum
+from abc import ABC, abstractmethod
 from pathlib import Path
 
 import pandas as pd
 
+from InferIndex import CleaningInferrer
 
-class CacheType(Enum):
-    CSV = ".csv"
-    PARQUET = ".parquet"
+
+class Cacher(ABC):
+    @property
+    @abstractmethod
+    def suffix(self) -> str:
+        ...
+
+    @abstractmethod
+    def read_cache(self, cache_file: Path) -> pd.DataFrame:
+        ...
+
+    @abstractmethod
+    def write_cache(self, cache_file: Path, df: pd.DataFrame) -> None:
+        ...
+
+
+class ParquetCacher(Cacher):
+    @property
+    def suffix(self) -> str:
+        return ".parquet"
+
+    def read_cache(self, cache_file: Path) -> pd.DataFrame:
+        return pd.read_parquet(cache_file)
+
+    def write_cache(self, cache_file: Path, df: pd.DataFrame) -> None:
+        # Convert object dtypes to str
+        df = df.convert_dtypes()
+        obj_cols = df.select_dtypes(include="object").columns
+        df[obj_cols] = df[obj_cols].astype(str)
+        df[obj_cols] = df[obj_cols].replace("nan", pd.NA)
+        df.to_parquet(cache_file)
+
+
+class CSVCacher(Cacher):
+    @property
+    def suffix(self) -> str:
+        return ".csv"
+
+    def read_cache(self, cache_file: Path) -> pd.DataFrame:
+        return pd.read_csv(cache_file)
+
+    def write_cache(self, cache_file: Path, df: pd.DataFrame) -> None:
+        df.to_csv(cache_file, index=False)
+
+
+class UnstackingParquetCacher(ParquetCacher):
+    def write_cache(self, cache_file: Path, df: pd.DataFrame) -> None:
+        inferrer = CleaningInferrer()
+        df = inferrer.infer_index(df).T.unstack(0).T.convert_dtypes()  # type: ignore
+        super().write_cache(cache_file, df)
+
+
+class UnstackingCSVCacher(CSVCacher):
+    def read_cache(self, cache_file: Path) -> pd.DataFrame:
+        df = super().read_cache(cache_file)
+        inferrer = CleaningInferrer()
+        df = inferrer.infer_index(df).T.unstack(0).T.convert_dtypes()  # type: ignore
+        return df  # type: ignore
+
+    def write_cache(self, cache_file: Path, df: pd.DataFrame) -> None:
+        super().write_cache(cache_file, df)
+        inferrer = CleaningInferrer()
+        df = inferrer.infer_index(df).T.unstack(0).T.convert_dtypes()  # type: ignore
 
 
 class CachedExcelReader:
@@ -16,7 +77,7 @@ class CachedExcelReader:
         self,
         root_dir: Path | str | None = None,
         cache_dir: Path | str = ".cache",
-        cache_type: CacheType = CacheType.PARQUET,
+        cacher: Cacher = ParquetCacher(),
     ) -> None:
 
         # Handle root_dir
@@ -42,7 +103,7 @@ class CachedExcelReader:
         # Set internal values
         self.root_dir = root_dir
         self.cache_dir = cache_dir
-        self.cache_type = cache_type
+        self.cacher = cacher
 
     def __cache_file__(
         self,
@@ -50,38 +111,15 @@ class CachedExcelReader:
         cache_suffix: str | None = None,
     ) -> Path:
         if cache_suffix is None:
-            cache_file_name = file_name + self.cache_type.value
+            cache_file_name = file_name + self.cacher.suffix
         else:
-            cache_file_name = file_name + cache_suffix + self.cache_type.value
+            cache_file_name = file_name + cache_suffix + self.cacher.suffix
         return self.cache_dir / (cache_file_name)
 
     def __should_update_cache__(self, input_file: Path, cache_file: Path) -> bool:
         return not os.path.exists(cache_file) or (
             os.path.getmtime(input_file) > os.path.getmtime(cache_file)
         )
-
-    def __write_cache__(self, cache_file: Path, df: pd.DataFrame) -> None:
-        if self.cache_type == CacheType.PARQUET:
-            # Convert object dtypes to str
-            df = df.convert_dtypes()
-            obj_cols = df.select_dtypes(include="object").columns
-            df[obj_cols] = df[obj_cols].astype(str)
-            df[obj_cols] = df[obj_cols].replace("nan", pd.NA)
-            df.to_parquet(cache_file)
-        elif self.cache_type == CacheType.CSV:
-            df.to_csv(cache_file, index=False)
-        else:
-            raise NotImplementedError(f"{self.cache_type} is not a supported CacheType")
-
-    def __read_cache__(self, cache_file: Path) -> pd.DataFrame:
-        if self.cache_type == CacheType.PARQUET:
-            df = pd.read_parquet(cache_file)
-        elif self.cache_type == CacheType.CSV:
-            df = pd.read_csv(cache_file)
-        else:
-            raise NotImplementedError(f"{self.cache_type} is not a supported CacheType")
-
-        return df
 
     def read_excel(
         self,
@@ -96,9 +134,9 @@ class CachedExcelReader:
 
         if force_cache_update or self.__should_update_cache__(input_file, cache_file):
             df = pd.read_excel(input_file, sheet_name=sheet)
-            self.__write_cache__(cache_file, df)
+            self.cacher.write_cache(cache_file, df)
         else:
-            df = self.__read_cache__(cache_file)
+            df = self.cacher.read_cache(cache_file)
 
         return df.copy()
 
