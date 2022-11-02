@@ -2,17 +2,32 @@ import errno
 import os
 from abc import ABC, abstractmethod
 from pathlib import Path
+from typing import Callable
 
 import pandas as pd
 
-from InferIndex import CleaningInferrer
-
 
 class Cacher(ABC):
+    def __init__(
+        self,
+        pre_process: Callable[[pd.DataFrame], pd.DataFrame] | None = None,
+        post_process: Callable[[pd.DataFrame], pd.DataFrame] | None = None,
+    ) -> None:
+        self._pre_process = pre_process
+        self._post_process = post_process
+
     @property
     @abstractmethod
     def suffix(self) -> str:
         ...
+
+    @property
+    def pre_process(self) -> Callable[[pd.DataFrame], pd.DataFrame] | None:
+        return self._pre_process
+
+    @property
+    def post_process(self) -> Callable[[pd.DataFrame], pd.DataFrame] | None:
+        return self._post_process
 
     @abstractmethod
     def read_cache(self, cache_file: Path) -> pd.DataFrame:
@@ -24,6 +39,26 @@ class Cacher(ABC):
 
 
 class ParquetCacher(Cacher):
+    def __init__(
+        self,
+        pre_process: Callable[[pd.DataFrame], pd.DataFrame] | None = None,
+        post_process: Callable[[pd.DataFrame], pd.DataFrame] | None = None,
+    ) -> None:
+        self._user_pre_process = pre_process
+        super().__init__(self.__pq_pre_process__, post_process)
+
+    def __pq_pre_process__(self, df: pd.DataFrame) -> pd.DataFrame:
+        # Convert object dtypes to str
+        df = df.convert_dtypes()
+        obj_cols = df.select_dtypes(include="object").columns
+        df[obj_cols] = df[obj_cols].astype(str)
+        df[obj_cols] = df[obj_cols].replace("nan", pd.NA)
+
+        if self._user_pre_process is not None:
+            df = self._user_pre_process(df)
+
+        return df
+
     @property
     def suffix(self) -> str:
         return ".parquet"
@@ -32,11 +67,6 @@ class ParquetCacher(Cacher):
         return pd.read_parquet(cache_file)
 
     def write_cache(self, cache_file: Path, df: pd.DataFrame) -> None:
-        # Convert object dtypes to str
-        df = df.convert_dtypes()
-        obj_cols = df.select_dtypes(include="object").columns
-        df[obj_cols] = df[obj_cols].astype(str)
-        df[obj_cols] = df[obj_cols].replace("nan", pd.NA)
         df.to_parquet(cache_file)
 
 
@@ -52,24 +82,7 @@ class CSVCacher(Cacher):
         df.to_csv(cache_file, index=False)
 
 
-class UnstackingParquetCacher(ParquetCacher):
-    def write_cache(self, cache_file: Path, df: pd.DataFrame) -> None:
-        inferrer = CleaningInferrer()
-        df = inferrer.infer_index(df).T.unstack(0).T.convert_dtypes()  # type: ignore
-        super().write_cache(cache_file, df)
-
-
-class UnstackingCSVCacher(CSVCacher):
-    def read_cache(self, cache_file: Path) -> pd.DataFrame:
-        df = super().read_cache(cache_file)
-        inferrer = CleaningInferrer()
-        df = inferrer.infer_index(df).T.unstack(0).T.convert_dtypes()  # type: ignore
-        return df  # type: ignore
-
-    def write_cache(self, cache_file: Path, df: pd.DataFrame) -> None:
-        super().write_cache(cache_file, df)
-        inferrer = CleaningInferrer()
-        df = inferrer.infer_index(df).T.unstack(0).T.convert_dtypes()  # type: ignore
+DEFAULT_CACHER = ParquetCacher()
 
 
 class CachedExcelReader:
@@ -77,7 +90,6 @@ class CachedExcelReader:
         self,
         root_dir: Path | str | None = None,
         cache_dir: Path | str = ".cache",
-        cacher: Cacher = ParquetCacher(),
     ) -> None:
 
         # Handle root_dir
@@ -103,17 +115,17 @@ class CachedExcelReader:
         # Set internal values
         self.root_dir = root_dir
         self.cache_dir = cache_dir
-        self.cacher = cacher
 
     def __cache_file__(
         self,
         file_name: str,
-        cache_suffix: str | None = None,
+        cacher_suffix: str,
+        user_suffix: str | None = None,
     ) -> Path:
-        if cache_suffix is None:
-            cache_file_name = file_name + self.cacher.suffix
+        if user_suffix is None:
+            cache_file_name = file_name + cacher_suffix
         else:
-            cache_file_name = file_name + cache_suffix + self.cacher.suffix
+            cache_file_name = file_name + user_suffix + cacher_suffix
         return self.cache_dir / (cache_file_name)
 
     def __should_update_cache__(self, input_file: Path, cache_file: Path) -> bool:
@@ -126,17 +138,32 @@ class CachedExcelReader:
         file_name: str,
         sheet: str | int = 0,
         cache_suffix: str | None = None,
+        cacher: Cacher = DEFAULT_CACHER,
+        root_rel_offset: str | None = None,
         force_cache_update: bool = False,
     ) -> pd.DataFrame | pd.Series:
 
-        input_file = self.root_dir / (file_name + ".xlsx")
-        cache_file = self.__cache_file__(file_name, cache_suffix)
+        input_file = self.root_dir
+        if root_rel_offset is not None:
+            input_file /= root_rel_offset
+        input_file /= file_name + ".xlsx"
+
+        cache_file = self.__cache_file__(
+            file_name=file_name,
+            user_suffix=cache_suffix,
+            cacher_suffix=cacher.suffix,
+        )
 
         if force_cache_update or self.__should_update_cache__(input_file, cache_file):
             df = pd.read_excel(input_file, sheet_name=sheet)
-            self.cacher.write_cache(cache_file, df)
+            if cacher.pre_process is not None:
+                df = cacher.pre_process(df)
+            cacher.write_cache(cache_file, df)
         else:
-            df = self.cacher.read_cache(cache_file)
+            df = cacher.read_cache(cache_file)
+
+        if cacher.post_process is not None:
+            df = cacher.post_process(df)
 
         return df.copy()
 
