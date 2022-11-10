@@ -159,11 +159,7 @@ cython_debug/
 #  option (not recommended) you can uncomment the following to ignore the entire idea folder.
 #.idea/
 
-# Files collected by Collect.py
-collected/
-
 # Custom
-
 #  Ignore input files, but keep the folder
 Input/*
 !Input/.gitkeep
