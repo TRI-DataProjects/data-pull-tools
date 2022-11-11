@@ -17,7 +17,7 @@ def remove_invalid_programs(progs: pd.DataFrame) -> pd.DataFrame:
         )
         | (progs["Regulation"].isna())
         | (progs["Business Name"] == ", ")
-    )
+    ).fillna(False)
 
     return progs[~mask].copy()
 
