@@ -6,6 +6,11 @@ from typing import Callable
 
 import pandas as pd
 
+if os.name == "nt":
+    from ctypes import WinError, windll
+
+    from win32con import FILE_ATTRIBUTE_HIDDEN
+
 
 class Cacher(ABC):
     def __init__(
@@ -111,10 +116,31 @@ class CachedExcelReader:
 
         if not os.path.exists(cache_dir):
             os.mkdir(cache_dir)
+        cache_dir = self._hide_file(cache_dir)
 
         # Set internal values
         self.root_dir = root_dir
         self.cache_dir = cache_dir
+
+    def _nix_hide_file(self, path: Path) -> Path:
+        if not path.name.startswith("."):
+            new_path = path.parent / ("." + path.name)
+            os.rename(path, new_path)
+        return path
+
+    def _win_hide_file(self, path: Path) -> Path:
+        path = self._nix_hide_file(path)
+        if not windll.kernel32.SetFileAttributesW(
+            str(path.absolute()),
+            FILE_ATTRIBUTE_HIDDEN,
+        ):
+            raise WinError()
+        return path
+
+    if os.name == "nt":
+        _hide_file = _win_hide_file
+    else:
+        _hide_file = _nix_hide_file
 
     def __cache_file__(
         self,
