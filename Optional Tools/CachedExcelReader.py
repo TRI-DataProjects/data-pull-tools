@@ -1,5 +1,6 @@
 import errno
 import os
+import shutil
 from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import Callable
@@ -50,9 +51,9 @@ class ParquetCacher(Cacher):
         post_process: Callable[[pd.DataFrame], pd.DataFrame] | None = None,
     ) -> None:
         self._user_pre_process = pre_process
-        super().__init__(self.__pq_pre_process__, post_process)
+        super().__init__(self._pq_pre_process, post_process)
 
-    def __pq_pre_process__(self, df: pd.DataFrame) -> pd.DataFrame:
+    def _pq_pre_process(self, df: pd.DataFrame) -> pd.DataFrame:
         # Convert object dtypes to str
         df = df.convert_dtypes()
         obj_cols = df.select_dtypes(include="object").columns
@@ -116,33 +117,29 @@ class CachedExcelReader:
 
         if not os.path.exists(cache_dir):
             os.mkdir(cache_dir)
-        cache_dir = self._hide_file(cache_dir)
+            cache_dir = self._hide_file(cache_dir)
 
         # Set internal values
         self.root_dir = root_dir
         self.cache_dir = cache_dir
 
-    def _nix_hide_file(self, path: Path) -> Path:
+    def _hide_file(self, path: Path) -> Path:
+
         if not path.name.startswith("."):
             new_path = path.parent / ("." + path.name)
             os.rename(path, new_path)
+
+        if os.name == "nt":
+            # Set file attributes on win machines
+            if not windll.kernel32.SetFileAttributesW(
+                str(path.absolute()),
+                FILE_ATTRIBUTE_HIDDEN,
+            ):
+                raise WinError()
+
         return path
 
-    def _win_hide_file(self, path: Path) -> Path:
-        path = self._nix_hide_file(path)
-        if not windll.kernel32.SetFileAttributesW(
-            str(path.absolute()),
-            FILE_ATTRIBUTE_HIDDEN,
-        ):
-            raise WinError()
-        return path
-
-    if os.name == "nt":
-        _hide_file = _win_hide_file
-    else:
-        _hide_file = _nix_hide_file
-
-    def __cache_file__(
+    def _cache_file(
         self,
         file_name: str,
         cacher_suffix: str,
@@ -154,7 +151,7 @@ class CachedExcelReader:
             cache_file_name = file_name + user_suffix + cacher_suffix
         return self.cache_dir / (cache_file_name)
 
-    def __should_update_cache__(self, input_file: Path, cache_file: Path) -> bool:
+    def _should_update_cache(self, input_file: Path, cache_file: Path) -> bool:
         return not os.path.exists(cache_file) or (
             os.path.getmtime(input_file) > os.path.getmtime(cache_file)
         )
@@ -168,19 +165,17 @@ class CachedExcelReader:
         root_rel_offset: str | None = None,
         force_cache_update: bool = False,
     ) -> pd.DataFrame | pd.Series:
-
         input_file = self.root_dir
         if root_rel_offset is not None:
             input_file /= root_rel_offset
         input_file /= file_name + ".xlsx"
-
-        cache_file = self.__cache_file__(
+        cache_file = self._cache_file(
             file_name=file_name,
             user_suffix=cache_suffix,
             cacher_suffix=cacher.suffix,
         )
 
-        if force_cache_update or self.__should_update_cache__(input_file, cache_file):
+        if force_cache_update or self._should_update_cache(input_file, cache_file):
             df = pd.read_excel(input_file, sheet_name=sheet)
             if cacher.pre_process is not None:
                 df = cacher.pre_process(df)
@@ -194,8 +189,15 @@ class CachedExcelReader:
         return df.copy()
 
     def empty_cache_directory(self) -> None:
-        for f in os.scandir(self.cache_dir):
-            os.remove(f.path)
+        with os.scandir(self.cache_dir) as entries:
+            for entry in entries:
+                try:
+                    if entry.is_file() or entry.is_symlink():
+                        os.remove(entry)
+                    elif entry.is_dir():
+                        shutil.rmtree(entry)
+                except Exception as e:
+                    print(f"Failed to delete {entry}. Reason: {e}")
 
 
 if __name__ == "__main__":
