@@ -1,7 +1,14 @@
+import os
 from enum import Enum
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
+
+if os.name == "nt":
+    from ctypes import WinError, windll
+
+    from win32con import FILE_ATTRIBUTE_HIDDEN
 
 
 def remove_invalid_programs(progs: pd.DataFrame) -> pd.DataFrame:
@@ -163,3 +170,19 @@ def type_code_programs(progs: pd.DataFrame, dropna: bool = False) -> pd.DataFram
         progs = progs[~mask]
 
     return progs.copy()
+
+def hide_file(path: Path) -> Path:
+    path = path.resolve()
+    if not path.name.startswith("."):
+        new_path = path.parent / ("." + path.name)
+        os.rename(path, new_path)
+
+    if os.name == "nt":
+        # Set file attributes on win machines
+        if not windll.kernel32.SetFileAttributesW(
+            str(path.absolute()),
+            FILE_ATTRIBUTE_HIDDEN,
+        ):
+            raise WinError()
+
+    return path

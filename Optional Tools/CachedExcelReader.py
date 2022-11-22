@@ -124,7 +124,7 @@ class CachedExcelReader:
         self.cache_dir = cache_dir
 
     def _hide_file(self, path: Path) -> Path:
-
+        path = path.resolve()
         if not path.name.startswith("."):
             new_path = path.parent / ("." + path.name)
             os.rename(path, new_path)
