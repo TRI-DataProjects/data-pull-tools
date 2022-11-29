@@ -144,9 +144,9 @@ class CleaningInferrer(IndexInferrer):
 
 
 if __name__ == "__main__":
-    import _ExampleDataSets as eds
+    from ._example_data import company_quarterly_df
 
-    df = eds.company_quarterly_df
+    df = company_quarterly_df
 
     print("Original:")
     print(df)

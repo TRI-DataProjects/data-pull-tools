@@ -1,16 +1,12 @@
 import errno
 import os
-import shutil
 from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import Callable
 
 import pandas as pd
 
-if os.name == "nt":
-    from ctypes import WinError, windll
-
-    from win32con import FILE_ATTRIBUTE_HIDDEN
+from .file_utils import hide_file
 
 
 class Cacher(ABC):
@@ -97,7 +93,6 @@ class CachedExcelReader:
         root_dir: Path | str | None = None,
         cache_dir: Path | str = ".cache",
     ) -> None:
-
         # Handle root_dir
         if root_dir is None:
             root_dir = Path()
@@ -117,27 +112,11 @@ class CachedExcelReader:
 
         if not os.path.exists(cache_dir):
             os.mkdir(cache_dir)
-            cache_dir = self._hide_file(cache_dir)
+            cache_dir = hide_file(cache_dir)
 
         # Set internal values
         self.root_dir = root_dir
         self.cache_dir = cache_dir
-
-    def _hide_file(self, path: Path) -> Path:
-        path = path.resolve()
-        if not path.name.startswith("."):
-            new_path = path.parent / ("." + path.name)
-            os.rename(path, new_path)
-
-        if os.name == "nt":
-            # Set file attributes on win machines
-            if not windll.kernel32.SetFileAttributesW(
-                str(path.absolute()),
-                FILE_ATTRIBUTE_HIDDEN,
-            ):
-                raise WinError()
-
-        return path
 
     def _cache_file(
         self,
@@ -187,17 +166,6 @@ class CachedExcelReader:
             df = cacher.post_process(df)
 
         return df.copy()
-
-    def empty_cache_directory(self) -> None:
-        with os.scandir(self.cache_dir) as entries:
-            for entry in entries:
-                try:
-                    if entry.is_file() or entry.is_symlink():
-                        os.remove(entry)
-                    elif entry.is_dir():
-                        shutil.rmtree(entry)
-                except Exception as e:
-                    print(f"Failed to delete {entry}. Reason: {e}")
 
 
 if __name__ == "__main__":
