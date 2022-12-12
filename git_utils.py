@@ -1,11 +1,13 @@
 from os import PathLike
 from pathlib import Path
-from subprocess import _CMD, CompletedProcess, run
+from subprocess import CompletedProcess, run
+from typing import Sequence, TypeAlias
 
-from _typeshed import StrOrBytesPath
+StrOrBytesPath: TypeAlias = str | bytes | PathLike[str] | PathLike[bytes]
+_CMD: TypeAlias = StrOrBytesPath | Sequence[StrOrBytesPath]
 
 
-class NotAGitProjectError(Exception):
+class NotAGitProjectError(OSError):
     pass
 
 
@@ -88,6 +90,7 @@ def run_git_safe_submodule(
 
 if __name__ == "__main__":
     import os
+    from subprocess import CalledProcessError
 
     root = Path(__file__).parent.absolute()
 
@@ -119,3 +122,13 @@ if __name__ == "__main__":
         print(result.stdout.rstrip())
     except Exception as e:
         print(e)
+
+    if not is_git_proj(home_directory):
+        try:
+            # Example of errors raised by underlying git error
+            result = run_git(["status"], home_directory)
+        except CalledProcessError as cpe:
+            print(cpe)
+            print(cpe.stderr.rstrip())
+        except Exception as e:
+            print(e)
