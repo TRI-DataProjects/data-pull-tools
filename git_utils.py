@@ -88,6 +88,29 @@ def run_git_safe_submodule(
     )
 
 
+def git_clone(
+    rem: StrOrBytesPath,
+    local: StrOrBytesPath | None = None,
+    *,
+    init_submodules: bool = False,
+    trust_local_sub_modules: bool = False,
+    capture_output: bool = True,
+    check: bool = True,
+) -> CompletedProcess[str]:
+    args: list[StrOrBytesPath] = ["clone", rem]
+    if local is not None:
+        args.append(local)
+    if init_submodules:
+        args.append("--recurse-submodules")
+
+    if trust_local_sub_modules:
+        git_func = run_git_safe_submodule
+    else:
+        git_func = run_git
+
+    return git_func(args=args, capture_output=capture_output, check=check)
+
+
 if __name__ == "__main__":
     import os
     from subprocess import CalledProcessError
