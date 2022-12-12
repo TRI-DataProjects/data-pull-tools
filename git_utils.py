@@ -27,6 +27,17 @@ def proj_has_changes(path: Path | str) -> bool:
     return result.stdout != ""
 
 
+def _append_args(
+    arg_list: list[StrOrBytesPath],
+    args: _CMD,
+) -> list[StrOrBytesPath]:
+    if isinstance(args, (str, bytes, PathLike)):
+        arg_list.append(args)
+    else:
+        arg_list.extend(args)
+    return arg_list
+
+
 def run_git(
     args: _CMD,
     cwd: StrOrBytesPath | None = None,
@@ -45,14 +56,9 @@ def run_git(
     Returns:
         CompletedProcess[str]: The result of executing the git process and args with `subprocess.run()`.
     """
-    g_args: list[StrOrBytesPath] = ["git"]
-    if isinstance(args, (str, bytes, PathLike)):
-        g_args.append(args)
-    else:
-        g_args.extend(args)
 
     return run(
-        args=g_args,
+        args=_append_args(["git"], args),
         cwd=cwd,
         encoding="utf-8",
         capture_output=capture_output,
@@ -74,14 +80,9 @@ def run_git_safe_submodule(
     # https://github.blog/2022-10-18-git-security-vulnerabilities-announced/#cve-2022-39253
     # https://bugs.launchpad.net/ubuntu/+source/git/+bug/1993586
     # https://git-scm.com/docs/git-config#Documentation/git-config.txt-protocolallow
-    g_args: list[StrOrBytesPath] = ["-c", "protocol.file.allow=always"]
-    if isinstance(args, (str, bytes, PathLike)):
-        g_args.append(args)
-    else:
-        g_args.extend(args)
 
     return run_git(
-        args=g_args,
+        args=_append_args(["-c", "protocol.file.allow=always"], args),
         cwd=cwd,
         capture_output=capture_output,
         check=check,
@@ -109,6 +110,28 @@ def git_clone(
         git_func = run_git
 
     return git_func(args=args, capture_output=capture_output, check=check)
+
+
+def git_submodule_recursive_foreach(
+    args: _CMD,
+    cwd: StrOrBytesPath | None = None,
+    *,
+    trust_local_sub_modules: bool = False,
+    capture_output: bool = True,
+    check: bool = True,
+) -> CompletedProcess[str]:
+
+    if trust_local_sub_modules:
+        git_func = run_git_safe_submodule
+    else:
+        git_func = run_git
+
+    return git_func(
+        args=_append_args(["submodule", "foreach", "--recursive"], args),
+        cwd=cwd,
+        capture_output=capture_output,
+        check=check,
+    )
 
 
 if __name__ == "__main__":
