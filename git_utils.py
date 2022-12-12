@@ -42,6 +42,7 @@ def run_git(
     args: _CMD,
     cwd: StrOrBytesPath | None = None,
     *,
+    cfg_opts: dict[str, str] | None = None,
     capture_output: bool = True,
     check: bool = True,
 ) -> CompletedProcess[str]:
@@ -50,12 +51,17 @@ def run_git(
     Args:
         args (list): Arguments to be passed to `git` process call.
         cwd (StrOrBytesPath | None, optional): Directory to execute `git` from. When None, use default cwd. Defaults to None.
+        cfg_opts (dict[str, str] | None = None, optional): Config options to be passed to the `git` process call with the `-c` flag. Defaults to None.
         capture_output (bool, optional): Capture stdout and stderr streams into returned `CompletedProcess` object. Defaults to True.
         check (bool, optional): Should this function check the process exit code and raise a `CalledProcessError` when it is non-zero. Defaults to True.
 
     Returns:
         CompletedProcess[str]: The result of executing the git process and args with `subprocess.run()`.
     """
+
+    if cfg_opts:
+        for key, val in cfg_opts.items():
+            args = _append_args(["-c", f"{key}={val}"], args)
 
     return run(
         args=_append_args(["git"], args),
@@ -66,27 +72,14 @@ def run_git(
     )
 
 
-def run_git_safe_submodule(
-    args: _CMD,
-    cwd: StrOrBytesPath | None = None,
-    *,
-    capture_output: bool = True,
-    check: bool = True,
-) -> CompletedProcess[str]:
-    # "protocol.file.allow=always" lets the submodule command clone from a local directory. It's
-    # necessary as of Git 2.38.1, where the default was changed to "user" in response to
-    # CVE-2022-39253. It isn't a concern here where all repos involved are trusted. For more
-    # information, see:
-    # https://github.blog/2022-10-18-git-security-vulnerabilities-announced/#cve-2022-39253
-    # https://bugs.launchpad.net/ubuntu/+source/git/+bug/1993586
-    # https://git-scm.com/docs/git-config#Documentation/git-config.txt-protocolallow
-
-    return run_git(
-        args=_append_args(["-c", "protocol.file.allow=always"], args),
-        cwd=cwd,
-        capture_output=capture_output,
-        check=check,
-    )
+### About: trust_local_submodules ###
+# "protocol.file.allow=always" lets the submodule command clone from a local directory. It's
+# necessary as of Git 2.38.1, where the default was changed to "user" in response to
+# CVE-2022-39253. It isn't a concern when all repos involved are trusted. For more
+# information, see:
+# https://github.blog/2022-10-18-git-security-vulnerabilities-announced/#cve-2022-39253
+# https://bugs.launchpad.net/ubuntu/+source/git/+bug/1993586
+# https://git-scm.com/docs/git-config#Documentation/git-config.txt-protocolallow
 
 
 def git_clone(
@@ -94,41 +87,52 @@ def git_clone(
     local: StrOrBytesPath | None = None,
     *,
     init_submodules: bool = False,
-    trust_local_sub_modules: bool = False,
+    trust_local_submodules: bool = False,
+    cfg_opts: dict[str, str] | None = None,
     capture_output: bool = True,
     check: bool = True,
 ) -> CompletedProcess[str]:
+
     args: list[StrOrBytesPath] = ["clone", rem]
+
     if local is not None:
         args.append(local)
+
     if init_submodules:
         args.append("--recurse-submodules")
 
-    if trust_local_sub_modules:
-        git_func = run_git_safe_submodule
-    else:
-        git_func = run_git
+    if trust_local_submodules:
+        if not cfg_opts:
+            cfg_opts = dict()
+        cfg_opts["protocol.file.allow"] = "always"
 
-    return git_func(args=args, capture_output=capture_output, check=check)
+    return run_git(
+        args=args,
+        cfg_opts=cfg_opts,
+        capture_output=capture_output,
+        check=check,
+    )
 
 
 def git_submodule_recursive_foreach(
     args: _CMD,
     cwd: StrOrBytesPath | None = None,
     *,
-    trust_local_sub_modules: bool = False,
+    trust_local_submodules: bool = False,
+    cfg_opts: dict[str, str] | None = None,
     capture_output: bool = True,
     check: bool = True,
 ) -> CompletedProcess[str]:
 
-    if trust_local_sub_modules:
-        git_func = run_git_safe_submodule
-    else:
-        git_func = run_git
+    if trust_local_submodules:
+        if not cfg_opts:
+            cfg_opts = dict()
+        cfg_opts["protocol.file.allow"] = "always"
 
-    return git_func(
+    return run_git(
         args=_append_args(["submodule", "foreach", "--recursive"], args),
         cwd=cwd,
+        cfg_opts=cfg_opts,
         capture_output=capture_output,
         check=check,
     )
