@@ -1,6 +1,8 @@
+from os import PathLike
 from pathlib import Path
-from subprocess import PIPE, CompletedProcess, run
-from typing import Iterable
+from subprocess import _CMD, CompletedProcess, run
+
+from _typeshed import StrOrBytesPath
 
 
 class NotAGitProjectError(Exception):
@@ -24,8 +26,8 @@ def proj_has_changes(path: Path | str) -> bool:
 
 
 def run_git(
-    args: Iterable,
-    c_dir: Path | str | None = None,
+    args: _CMD,
+    cwd: StrOrBytesPath | None = None,
     *,
     capture_output: bool = True,
     check: bool = True,
@@ -34,27 +36,51 @@ def run_git(
 
     Args:
         args (list): Arguments to be passed to `git` process call.
-        c_dir (Path | None, optional): Directory to execute `git` from via `-C` flag. Defaults to None.
+        cwd (StrOrBytesPath | None, optional): Directory to execute `git` from. When None, use default cwd. Defaults to None.
         capture_output (bool, optional): Capture stdout and stderr streams into returned `CompletedProcess` object. Defaults to True.
         check (bool, optional): Should this function check the process exit code and raise a `CalledProcessError` when it is non-zero. Defaults to True.
 
     Returns:
         CompletedProcess[str]: The result of executing the git process and args with `subprocess.run()`.
     """
-    g_args = ["git"]
-
-    if c_dir is not None:
-        if isinstance(c_dir, str):
-            c_dir = Path(c_dir)
-        if not c_dir.is_dir():
-            raise NotADirectoryError(f"Path provided is not a directory: '{c_dir}'")
-        g_args += ["-C", c_dir]
-
-    g_args += args
+    g_args: list[StrOrBytesPath] = ["git"]
+    if isinstance(args, (str, bytes, PathLike)):
+        g_args.append(args)
+    else:
+        g_args.extend(args)
 
     return run(
-        g_args,
+        args=g_args,
+        cwd=cwd,
         encoding="utf-8",
+        capture_output=capture_output,
+        check=check,
+    )
+
+
+def run_git_safe_submodule(
+    args: _CMD,
+    cwd: StrOrBytesPath | None = None,
+    *,
+    capture_output: bool = True,
+    check: bool = True,
+) -> CompletedProcess[str]:
+    # "protocol.file.allow=always" lets the submodule command clone from a local directory. It's
+    # necessary as of Git 2.38.1, where the default was changed to "user" in response to
+    # CVE-2022-39253. It isn't a concern here where all repos involved are trusted. For more
+    # information, see:
+    # https://github.blog/2022-10-18-git-security-vulnerabilities-announced/#cve-2022-39253
+    # https://bugs.launchpad.net/ubuntu/+source/git/+bug/1993586
+    # https://git-scm.com/docs/git-config#Documentation/git-config.txt-protocolallow
+    g_args: list[StrOrBytesPath] = ["-c", "protocol.file.allow=always"]
+    if isinstance(args, (str, bytes, PathLike)):
+        g_args.append(args)
+    else:
+        g_args.extend(args)
+
+    return run_git(
+        args=g_args,
+        cwd=cwd,
         capture_output=capture_output,
         check=check,
     )
