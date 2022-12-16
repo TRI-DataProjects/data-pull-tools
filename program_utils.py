@@ -4,6 +4,54 @@ import numpy as np
 import pandas as pd
 
 
+def prog_has_rates_caps(progs: pd.DataFrame, age_details: pd.DataFrame) -> pd.DataFrame:
+
+    rate_columns = [x for x in age_details.columns if "Rate" in x]
+    non_rate_columns = [x for x in age_details.columns if "Rate" not in x]
+
+    rates = age_details[rate_columns].dropna(how="all")
+    capacities = age_details[non_rate_columns].dropna(how="all")
+
+    progs_with_rates = pd.Series(
+        rates.reset_index()["Record ID"].unique(),
+        name="Record ID",
+    )
+    progs_with_capacities = pd.Series(
+        capacities.reset_index()["Record ID"].unique(),
+        name="Record ID",
+    )
+
+    # Find programs that have rates
+    progs = pd.merge(
+        left=progs,
+        how="left",
+        right=progs_with_rates,
+        on="Record ID",
+        indicator=True,
+    )
+    progs = progs.drop_duplicates()
+
+    progs["Has Rate"] = progs["_merge"] != "left_only"
+    progs = progs[progs["_merge"] != "right_only"]
+    progs = progs.drop("_merge", axis=1)
+
+    # Find programs that have capacities
+    progs = pd.merge(
+        left=progs,
+        how="left",
+        right=progs_with_capacities,
+        on="Record ID",
+        indicator=True,
+    )
+    progs = progs.drop_duplicates()
+
+    progs["Has Capacity"] = progs["_merge"] != "left_only"
+    progs = progs[progs["_merge"] != "right_only"]
+    progs = progs.drop("_merge", axis=1)
+
+    return progs.copy()
+
+
 def remove_invalid_programs(progs: pd.DataFrame) -> pd.DataFrame:
     # Filter programs
     mask = (
