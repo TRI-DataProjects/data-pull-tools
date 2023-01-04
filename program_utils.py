@@ -1,10 +1,11 @@
+from dataclasses import dataclass
 from enum import Enum
 
 import numpy as np
 import pandas as pd
 
 
-def prog_has_rates_caps(progs: pd.DataFrame, age_details: pd.DataFrame) -> pd.DataFrame:
+def prog_has_rates_caps(df: pd.DataFrame, age_details: pd.DataFrame) -> pd.DataFrame:
 
     rate_columns = [x for x in age_details.columns if "Rate" in x]
     non_rate_columns = [x for x in age_details.columns if "Rate" not in x]
@@ -22,55 +23,77 @@ def prog_has_rates_caps(progs: pd.DataFrame, age_details: pd.DataFrame) -> pd.Da
     )
 
     # Find programs that have rates
-    progs = pd.merge(
-        left=progs,
+    df = pd.merge(
+        left=df,
         how="left",
         right=progs_with_rates,
         on="Record ID",
         indicator=True,
     )
-    progs = progs.drop_duplicates()
+    df = df.drop_duplicates()
 
-    progs["Has Rate"] = progs["_merge"] != "left_only"
-    progs = progs[progs["_merge"] != "right_only"]
-    progs = progs.drop("_merge", axis=1)
+    df["Has Rate"] = df["_merge"] != "left_only"
+    df = df[df["_merge"] != "right_only"]
+    df = df.drop("_merge", axis=1)
 
     # Find programs that have capacities
-    progs = pd.merge(
-        left=progs,
+    df = pd.merge(
+        left=df,
         how="left",
         right=progs_with_capacities,
         on="Record ID",
         indicator=True,
     )
-    progs = progs.drop_duplicates()
+    df = df.drop_duplicates()
 
-    progs["Has Capacity"] = progs["_merge"] != "left_only"
-    progs = progs[progs["_merge"] != "right_only"]
-    progs = progs.drop("_merge", axis=1)
+    df["Has Capacity"] = df["_merge"] != "left_only"
+    df = df[df["_merge"] != "right_only"]
+    df = df.drop("_merge", axis=1)
 
-    return progs.copy()
+    return df.copy()
 
 
-def remove_invalid_programs(progs: pd.DataFrame) -> pd.DataFrame:
-    # Filter programs
-    mask = (
-        (progs["Status"] != "Active")
-        | (progs["License"].str.contains("TEST", regex=False, case=False))
-        | (progs["License"].str.contains("DUPLICATE", regex=False, case=False))
-        | (
-            progs["Provider Type"].str.contains(
+def invalid_programs_mask(df: pd.DataFrame, filter_status: bool = True) -> pd.Series:
+    invalid_masks = {
+        "Status": (df["Status"] != "Active"),
+        "TEST In License": (
+            df["License"].str.contains("TEST", regex=False, case=False)
+        ),
+        "DUPLICATE In License": (
+            df["License"].str.contains("DUPLICATE", regex=False, case=False)
+        ),
+        "Early Learning Hub": (
+            df["Provider Type"].str.contains(
                 "Early Learning Hub", regex=False, case=False
             )
-        )
-        | (progs["Regulation"].isna())
-        | (progs["Business Name"] == ", ")
-    ).fillna(False)
+        ),
+        "Empty Regulation": (df["Regulation"].isna()),
+        "Empty Business Name": (df["Business Name"] == ", "),
+    }
 
-    return progs[~mask].copy()
+    if not filter_status:
+        invalid_masks.pop("Status")
+
+    mask = pd.Series([False] * len(df.index))
+    for val in invalid_masks.values():
+        mask |= val.fillna(False)
+
+    return mask
 
 
-def type_code_programs(progs: pd.DataFrame, dropna: bool = False) -> pd.DataFrame:
+def remove_invalid_programs(
+    df: pd.DataFrame,
+    filter_status: bool = True,
+) -> pd.DataFrame:
+    # Filter programs
+    mask = invalid_programs_mask(
+        df=df,
+        filter_status=filter_status,
+    )
+    return df[~mask].copy()
+
+
+def type_code_programs(df: pd.DataFrame, dropna: bool = False) -> pd.DataFrame:
     class Col(str, Enum):
         PROV_TYPE = "Provider Type"
         PROG_TYPES = "Program Types"
@@ -79,45 +102,43 @@ def type_code_programs(progs: pd.DataFrame, dropna: bool = False) -> pd.DataFram
 
     # Clean columns of interest
     for col in Col:
-        progs[col.value] = progs[col.value].str.strip()
+        df[col.value] = df[col.value].str.strip()
 
     # Create masks for re-use
     masks: dict[str, dict[str, pd.Series[bool]]] = {
         Col.PROV_TYPE: {
-            "Licensed Home": progs[Col.PROV_TYPE] == "Licensed Home",
-            "Licensed Center": progs[Col.PROV_TYPE] == "Licensed Center",
-            "License Exempt Home": progs[Col.PROV_TYPE] == "License Exempt Home",
-            "License Exempt Center": progs[Col.PROV_TYPE] == "License Exempt Center",
-            "Interim Emergency Site": progs[Col.PROV_TYPE] == "Interim Emergency Site",
+            "Licensed Home": df[Col.PROV_TYPE] == "Licensed Home",
+            "Licensed Center": df[Col.PROV_TYPE] == "Licensed Center",
+            "License Exempt Home": df[Col.PROV_TYPE] == "License Exempt Home",
+            "License Exempt Center": df[Col.PROV_TYPE] == "License Exempt Center",
+            "Interim Emergency Site": df[Col.PROV_TYPE] == "Interim Emergency Site",
         },
         Col.PROG_TYPES: {
-            "PS": progs[Col.PROG_TYPES].str.contains(
-                "Preschool", regex=False, case=False
-            ),
-            "SA": progs[Col.PROG_TYPES].str.contains(
+            "PS": df[Col.PROG_TYPES].str.contains("Preschool", regex=False, case=False),
+            "SA": df[Col.PROG_TYPES].str.contains(
                 "School Age", regex=False, case=False
             ),
         },
         Col.LIC: {
-            "CC": progs[Col.LIC].str[:2].str.upper() == "CC",
-            "CF": progs[Col.LIC].str[:2].str.upper() == "CF",
-            "RF": progs[Col.LIC].str[:2].str.upper() == "RF",
-            "RS": progs[Col.LIC].str[:2].str.upper() == "RS",
-            "PS": progs[Col.LIC].str[:2].str.upper() == "PS",
-            "SA": progs[Col.LIC].str[:2].str.upper() == "SA",
-            "RA": progs[Col.LIC].str[:2].str.upper() == "RA",
-            "AP": progs[Col.LIC].str[:2].str.upper() == "AP",
-            "IQY": progs[Col.LIC].str[:3].str.upper() == "IQY",
+            "CC": df[Col.LIC].str[:2].str.upper() == "CC",
+            "CF": df[Col.LIC].str[:2].str.upper() == "CF",
+            "RF": df[Col.LIC].str[:2].str.upper() == "RF",
+            "RS": df[Col.LIC].str[:2].str.upper() == "RS",
+            "PS": df[Col.LIC].str[:2].str.upper() == "PS",
+            "SA": df[Col.LIC].str[:2].str.upper() == "SA",
+            "RA": df[Col.LIC].str[:2].str.upper() == "RA",
+            "AP": df[Col.LIC].str[:2].str.upper() == "AP",
+            "IQY": df[Col.LIC].str[:3].str.upper() == "IQY",
         },
         Col.REG: {
-            "CC": progs[Col.REG] == "Licensed Child Care Center",
-            "CF": progs[Col.REG] == "Certified Family Child Care",
-            "RF": progs[Col.REG] == "Registered Family Child Care",
-            "RS": progs[Col.REG] == "Regulated Subsidy",
-            "PS": progs[Col.REG] == "Recorded Preschool Program",
-            "SA": progs[Col.REG] == "Recorded School Age Program",
-            "RA": progs[Col.REG] == "Recorded Agency",
-            "UN": progs[Col.REG] == "Unlicensed",
+            "CC": df[Col.REG] == "Licensed Child Care Center",
+            "CF": df[Col.REG] == "Certified Family Child Care",
+            "RF": df[Col.REG] == "Registered Family Child Care",
+            "RS": df[Col.REG] == "Regulated Subsidy",
+            "PS": df[Col.REG] == "Recorded Preschool Program",
+            "SA": df[Col.REG] == "Recorded School Age Program",
+            "RA": df[Col.REG] == "Recorded Agency",
+            "UN": df[Col.REG] == "Unlicensed",
         },
     }
 
@@ -202,12 +223,138 @@ def type_code_programs(progs: pd.DataFrame, dropna: bool = False) -> pd.DataFram
         conditions[count] = np.array(conditions[count], dtype=bool)  # type: ignore
 
     # Apply type coding
-    progs["Type Code"] = ""
-    progs["Type Code"] = np.select(conditions, replacements, default=None)  # type: ignore
+    df["Type Code"] = ""
+    df["Type Code"] = np.select(conditions, replacements, default=None)  # type: ignore
 
     # Remove N/A type codes
     if dropna:
-        mask = progs["Type Code"].isna()
-        progs = progs[~mask]
+        mask = df["Type Code"].isna()
+        df = df[~mask]
 
-    return progs.copy()
+    return df.copy()
+
+
+@dataclass(frozen=True)
+class Region_SDA:
+    region: str
+    sda: int
+
+
+class SDA_Code(Enum):
+    BLUE_MOUNTAIN = Region_SDA("Blue Mountain", 1)
+    MULTNOMAH = Region_SDA("Multnomah", 2)
+    MPY = Region_SDA("Marion-Polk-Yamhill", 3)
+    NORTH_COAST = Region_SDA("North Coast", 4)
+    LBL = Region_SDA("Linn-Benton-Lincoln", 5)
+    LANE = Region_SDA("Lane", 6)
+    SOUTH_CENTRAL = Region_SDA("South Central", 7)
+    SOUTH_COAST = Region_SDA("South Coast", 8)
+    SOURTHERN = Region_SDA("Southern", 9)
+    THE_GORGE = Region_SDA("The Gorge", 10)
+    GRANT_HARNEY = Region_SDA("Grant-Harney", 11)
+    CENTRAL = Region_SDA("Central", 12)
+    EASTERN = Region_SDA("Eastern", 14)
+    CLACKAMAS = Region_SDA("Clackamas", 15)
+    WASHINGTON = Region_SDA("Washington", 16)
+
+
+def sda_code_programs(df: pd.DataFrame) -> pd.DataFrame:
+    masks: dict[int, pd.Series[bool]] = {}
+    for code in SDA_Code:
+        sda = code.value.sda
+        region = code.value.region
+        masks[sda] = (df["Region"].str.strip() == region).fillna(False)
+
+    # Break into component parts for numpy
+    replacements = list(masks.keys())
+    conditions = list(masks.values())
+
+    # Convert conditions from a boolean series to a boolean nupmy array
+    for count, _ in enumerate(conditions):
+        conditions[count] = np.array(conditions[count], dtype=bool)  # type: ignore
+
+    # Apply SDA coding
+    df["SDA"] = ""
+    df["SDA"] = np.select(conditions, replacements, default=None)  # type: ignore
+
+    return df.copy()
+
+
+class Program_Types(Enum):
+    BP = "Baby Promise"
+    PSP = "Preschool Promise"
+    EHS = "Early Head Start (OPK)"
+    HS = "Head Start (OPK)"
+    TRIBAL = "Tribal"
+    NURSERY = "Relief Nursery"
+
+
+def flag_program_types(df: pd.DataFrame) -> pd.DataFrame:
+    df["Program Types"] = df["Program Types"].str.strip()
+    for prog_type in Program_Types:
+        mask = (
+            df["Program Types"]
+            .str.contains(prog_type.value, regex=False, case=False)
+            .fillna(False)
+        )
+        df[prog_type.value] = mask
+    return df.copy()
+
+
+def care_for_ages_to_weeks(df: pd.DataFrame) -> pd.DataFrame:
+    p_from = "Care For Ages From"
+    p_to = "Care For Ages To"
+    df[f"{p_from} Weeks"] = (df[f"{p_from} Months"] * 4) + (df[f"{p_from} Years"] * 52)
+    df[f"{p_to} Weeks"] = (df[f"{p_to} Months"] * 4) + (df[f"{p_to} Years"] * 52)
+
+    return df.copy()
+
+
+@dataclass(frozen=True)
+class Age_Range:
+    label: str
+    lower_bound: int
+    upper_bound: int | None
+
+    def to_col_name(self) -> str:
+        label = self.label
+        l_bound = self.lower_bound
+        u_bound = self.upper_bound
+
+        if u_bound is not None:
+            return f"{label} ({l_bound}-{u_bound})"
+        else:
+            return f"{label} ({l_bound}+)"
+
+
+class Age_Ranges(Enum):
+    INFANT = Age_Range("Infant", 0, 104)
+    TODDLER = Age_Range("Toddler", 104, 208)
+    PRESCHOOL = Age_Range("Preschool", 208, 260)
+    SCHOOL_AGE = Age_Range("School Age", 260, None)
+
+
+def care_for_flag_from_weeks(df: pd.DataFrame) -> pd.DataFrame:
+    from_weeks = "Care For Ages From Weeks"
+    to_weeks = "Care For Ages To Weeks"
+
+    valid_range_mask = ((df[to_weeks] != 0) & (df[from_weeks] != df[to_weeks])).fillna(
+        False
+    )
+
+    df["Unknown Care Range"] = ~valid_range_mask
+
+    for a_range in Age_Ranges:
+        a_range = a_range.value
+        l_bound = a_range.lower_bound
+        u_bound = a_range.upper_bound
+
+        mask = valid_range_mask.copy()
+
+        mask &= (l_bound <= df[to_weeks]).fillna(False)
+        if u_bound is not None:
+            mask &= (df[from_weeks] < u_bound).fillna(False)
+
+        df[a_range.to_col_name()] = mask
+
+    return df.copy()
