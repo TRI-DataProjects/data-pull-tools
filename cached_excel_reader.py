@@ -140,6 +140,7 @@ class CachedExcelReader:
         file_name: str,
         sheet: str | int = 0,
         cache_suffix: str | None = None,
+        *,
         cacher: Cacher = DEFAULT_CACHER,
         root_rel_offset: str | None = None,
         force_cache_update: bool = False,

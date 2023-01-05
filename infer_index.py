@@ -144,7 +144,7 @@ class CleaningInferrer(IndexInferrer):
 
 
 if __name__ == "__main__":
-    from ._example_data import company_quarterly_df
+    from _example_data import company_quarterly_df
 
     df = company_quarterly_df
 
