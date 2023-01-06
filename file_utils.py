@@ -26,12 +26,13 @@ def hide_file(path: Path) -> Path:
 
 
 def clear_dir(path: Path) -> None:
-    with os.scandir(path) as entries:
-        for entry in entries:
-            try:
-                if entry.is_file() or entry.is_symlink():
-                    os.remove(entry)
-                elif entry.is_dir():
-                    shutil.rmtree(entry)
-            except Exception as e:
-                print(f"Failed to delete {entry}. Reason: {e}")
+    if path.exists():
+        with os.scandir(path) as entries:
+            for entry in entries:
+                try:
+                    if entry.is_file() or entry.is_symlink():
+                        os.remove(entry)
+                    elif entry.is_dir():
+                        shutil.rmtree(entry)
+                except Exception as e:
+                    print(f"Failed to delete {entry}. Reason: {e}")
