@@ -7,8 +7,12 @@ import pandas as pd
 
 def prog_has_rates_caps(df: pd.DataFrame, age_details: pd.DataFrame) -> pd.DataFrame:
 
-    rate_columns = [x for x in age_details.columns if "Rate" in x]
-    non_rate_columns = [x for x in age_details.columns if "Rate" not in x]
+    rate_columns = [
+        x for x in age_details.columns if isinstance(x, str) and "Rate" in x
+    ]
+    non_rate_columns = [
+        x for x in age_details.columns if isinstance(x, str) and "Rate" not in x
+    ]
 
     rates = age_details[rate_columns].dropna(how="all")
     capacities = age_details[non_rate_columns].dropna(how="all")
@@ -50,7 +54,7 @@ def prog_has_rates_caps(df: pd.DataFrame, age_details: pd.DataFrame) -> pd.DataF
     df = df[df["_merge"] != "right_only"]
     df = df.drop("_merge", axis=1)
 
-    return df.copy()
+    return df
 
 
 def invalid_programs_mask(df: pd.DataFrame, filter_status: bool = True) -> pd.Series:
@@ -90,7 +94,7 @@ def remove_invalid_programs(
         df=df,
         filter_status=filter_status,
     )
-    return df[~mask].copy()
+    return df[~mask]
 
 
 def type_code_programs(df: pd.DataFrame, dropna: bool = False) -> pd.DataFrame:
@@ -231,7 +235,7 @@ def type_code_programs(df: pd.DataFrame, dropna: bool = False) -> pd.DataFrame:
         mask = df["Type Code"].isna()
         df = df[~mask]
 
-    return df.copy()
+    return df
 
 
 @dataclass(frozen=True)
@@ -277,16 +281,22 @@ def sda_code_programs(df: pd.DataFrame) -> pd.DataFrame:
     df["SDA"] = ""
     df["SDA"] = np.select(conditions, replacements, default=None)  # type: ignore
 
-    return df.copy()
+    return df
 
 
 class Program_Types(Enum):
-    BP = "Baby Promise"
-    PSP = "Preschool Promise"
-    EHS = "Early Head Start (OPK)"
+    PS = "Preschool"
     HS = "Head Start (OPK)"
-    TRIBAL = "Tribal"
+    EHS = "Early Head Start (OPK)"
+    SAC = "School Age Before & After Care"
+    BP = "Baby Promise"
+    CCI = "CCI (Multnomah)"
+    SAFT = "School Age Full-Time"
+    PSP = "Preschool Promise"
+    FOSTER = "Foster Care"
     NURSERY = "Relief Nursery"
+    TEEN = "Teen Parent"
+    TRIBAL = "Tribal"
 
 
 def flag_program_types(df: pd.DataFrame) -> pd.DataFrame:
@@ -298,7 +308,7 @@ def flag_program_types(df: pd.DataFrame) -> pd.DataFrame:
             .fillna(False)
         )
         df[prog_type.value] = mask
-    return df.copy()
+    return df
 
 
 def care_for_ages_to_weeks(df: pd.DataFrame) -> pd.DataFrame:
@@ -307,7 +317,7 @@ def care_for_ages_to_weeks(df: pd.DataFrame) -> pd.DataFrame:
     df[f"{p_from} Weeks"] = (df[f"{p_from} Months"] * 4) + (df[f"{p_from} Years"] * 52)
     df[f"{p_to} Weeks"] = (df[f"{p_to} Months"] * 4) + (df[f"{p_to} Years"] * 52)
 
-    return df.copy()
+    return df
 
 
 @dataclass(frozen=True)
@@ -357,4 +367,4 @@ def care_for_flag_from_weeks(df: pd.DataFrame) -> pd.DataFrame:
 
         df[a_range.to_col_name()] = mask
 
-    return df.copy()
+    return df
