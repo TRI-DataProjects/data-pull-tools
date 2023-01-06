@@ -166,7 +166,7 @@ class CachedExcelReader:
         if cacher.post_process is not None:
             df = cacher.post_process(df)
 
-        return df.copy()
+        return df
 
 
 if __name__ == "__main__":
