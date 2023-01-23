@@ -11,7 +11,7 @@ def unstack_age_details(df: DataFrame) -> DataFrame:
     # Fix multi-index
     mi: MultiIndex = df.index.copy()  # type: ignore
     names = list(mi.names)
-    names[-1] = "Age Details"
+    names[-1] = "Age Group"
     mi.rename(names, inplace=True)
 
     # Convert "Record ID" to numeric
