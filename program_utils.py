@@ -338,10 +338,10 @@ class Age_Range:
 
 
 class Age_Ranges(Enum):
-    INFANT = Age_Range("Infant", 0, 104)
-    TODDLER = Age_Range("Toddler", 104, 208)
-    PRESCHOOL = Age_Range("Preschool", 208, 260)
-    SCHOOL_AGE = Age_Range("School Age", 260, None)
+    INFANT = Age_Range("Infant", 0, 2 * 52)
+    TODDLER = Age_Range("Toddler", 2 * 52, 3 * 52)
+    PRESCHOOL = Age_Range("Preschool", 3 * 52, 5 * 52)
+    SCHOOL_AGE = Age_Range("School Age", 5 * 52, None)
 
 
 def care_for_flag_from_weeks(df: pd.DataFrame) -> pd.DataFrame:
