@@ -66,7 +66,7 @@ def run_git(
     return run(
         args=_append_args(["git"], args),
         cwd=cwd,
-        encoding="utf-8",
+        text=True,
         capture_output=capture_output,
         check=check,
     )
