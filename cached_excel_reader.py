@@ -144,11 +144,14 @@ class CachedExcelReader:
         cacher: Cacher = DEFAULT_CACHER,
         root_rel_offset: str | None = None,
         force_cache_update: bool = False,
-    ) -> pd.DataFrame | pd.Series:
+    ) -> pd.DataFrame:
         input_file = self.root_dir
         if root_rel_offset is not None:
             input_file /= root_rel_offset
-        input_file /= file_name + ".xlsx"
+        if file_name.endswith(".xlsx"):
+            input_file /= file_name
+        else:
+            input_file /= file_name + ".xlsx"
         cache_file = self._cache_file(
             file_name=file_name,
             user_suffix=cache_suffix,
