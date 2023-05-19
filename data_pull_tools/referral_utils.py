@@ -8,8 +8,9 @@ from typing import Union
 
 import numpy as np
 import pandas as pd
-from cached_excel_reader import CachedExcelReader
 from pandas import DataFrame
+
+from data_pull_tools.cached_excel_reader import CachedExcelReader
 
 StrPath = Union[str, PathLike[str]]
 _search_in_minute = "Referral Search Number In Minute"

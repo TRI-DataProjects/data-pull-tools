@@ -9,7 +9,7 @@ posix_deploy_paths = []
 
 [tool.poetry]
 name = "data_pull_tools"
-version = "0.1.0"
+version = "0.1.1"
 description = ""
 authors = ["John Merkel <dev.genericallyterrible@gmail.com>"]
 readme = "README.md"
@@ -48,12 +48,15 @@ pytest = "^7.3.0"
 [tool.poe.tasks._pre_commit_update]
 cmd = "pre-commit autoupdate"
 
+[tool.poe.tasks._poetry_update_self]
+cmd = "poetry self update"
+
 [tool.poe.tasks._poetry_update]
 cmd = "poetry update"
 
 [tool.poe.tasks.update]
 help = "Update all packages and tools"
-sequence = ["_pre_commit_update", "_poetry_update"]
+sequence = ["_pre_commit_update", "_poetry_update_self", "_poetry_update"]
 
 [tool.poe.tasks._lock]
 help = "Update project's poetry.lock file"

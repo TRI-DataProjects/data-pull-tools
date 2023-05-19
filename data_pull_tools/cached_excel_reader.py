@@ -5,7 +5,8 @@ from collections.abc import Callable
 from pathlib import Path
 
 import pandas as pd
-from file_utils import hide_file
+
+from data_pull_tools.file_utils import hide_file
 
 
 class Cacher(ABC):

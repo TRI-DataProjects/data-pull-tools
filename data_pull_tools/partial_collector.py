@@ -2,7 +2,8 @@ import os
 from pathlib import Path
 
 import pandas as pd
-from cached_excel_reader import CachedExcelReader
+
+from data_pull_tools.cached_excel_reader import CachedExcelReader
 
 
 class PartialCollector:
