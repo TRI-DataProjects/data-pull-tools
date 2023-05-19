@@ -1,8 +1,8 @@
 import re
 from abc import ABC, abstractmethod
 from collections import defaultdict
+from collections.abc import Callable
 from re import Match
-from typing import Callable
 
 import pandas as pd
 
@@ -25,7 +25,6 @@ class CleaningInferrer(IndexInferrer):
         self._repl = repl
 
     def infer_index(self, df: pd.DataFrame | pd.Series) -> pd.DataFrame | pd.Series:
-
         # Bail early if it's a series by mistake!
         # Cannot infer index from a MultiIndex
         if isinstance(df, pd.Series) or isinstance(df.columns, pd.MultiIndex):
@@ -34,7 +33,6 @@ class CleaningInferrer(IndexInferrer):
         return self._infer_column_index(df)  # type: ignore
 
     def _infer_column_index(self, df: pd.DataFrame) -> pd.DataFrame:
-
         index_cols: list[int]
 
         pattern = self._pattern
@@ -97,7 +95,6 @@ class CleaningInferrer(IndexInferrer):
         cols_list: list,
         header_rows: int,
     ) -> tuple[pd.DataFrame, list[int]]:
-
         pattern = self._pattern
         repl = self._repl
         index_cols: list[int] = list()

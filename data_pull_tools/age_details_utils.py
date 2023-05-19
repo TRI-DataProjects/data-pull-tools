@@ -1,6 +1,5 @@
+from infer_index import CleaningInferrer
 from pandas import DataFrame, MultiIndex
-
-from data_pull_tools.infer_index import CleaningInferrer
 
 
 def unstack_age_details(df: DataFrame) -> DataFrame:

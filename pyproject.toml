@@ -1,0 +1,121 @@
+[tool]
+
+[tool._scripts]
+win_deploy_paths = [
+    "\\\\groupr.wou.edu\\groupr\\tri\\Train\\Data-Team\\dist",
+    "I:\\Train\\Data-Team\\dist",
+]
+posix_deploy_paths = []
+
+[tool.poetry]
+name = "data_pull_tools"
+version = "0.1.0"
+description = ""
+authors = ["John Merkel <dev.genericallyterrible@gmail.com>"]
+readme = "README.md"
+packages = [{ include = "data_pull_tools" }]
+exclude = ["_scripts"]
+
+[tool.poetry.dependencies]
+python = "^3.10"
+fastparquet = "^2023.4.0"
+ftfy = "^6.1.1"
+ipython = "^8.13.2"
+openpyxl = "^3.1.2"
+pandas = "^2.0.1"
+pywin32 = "^306"
+rich = "^13.3.5"
+tomlkit = "^0.11.8"
+
+[tool.poetry.group]
+[tool.poetry.group.dev.dependencies]
+black = "^23.3.0"
+flake8 = "^6.0.0"
+flake8-bugbear = "^23.5.9"
+isort = "^5.12.0"
+poethepoet = "^0.20.0"
+tox = "^4.5.1"
+pre-commit = "^3.3.1"
+pyupgrade = "^3.4.0"
+gitpython = "^3.1.31"
+
+[tool.poetry.group.test.dependencies]
+coverage = { extras = ["toml"], version = "^7.2.5" }
+pytest = "^7.3.0"
+
+
+[tool.poe.tasks]
+[tool.poe.tasks._pre_commit_update]
+cmd = "pre-commit autoupdate"
+
+[tool.poe.tasks._poetry_update]
+cmd = "poetry update"
+
+[tool.poe.tasks.update]
+help = "Update all packages and tools"
+sequence = ["_pre_commit_update", "_poetry_update"]
+
+[tool.poe.tasks._lock]
+help = "Update project's poetry.lock file"
+cmd = "poetry lock"
+
+[tool.poe.tasks._tox]
+help = "Run tox on the project"
+cmd = "tox -p"
+
+[tool.poe.tasks.test]
+help = "Test the project"
+sequence = ["_lock", "_tox"]
+
+[tool.poe.tasks.build]
+help = "Build the project"
+cmd = "poetry build"
+
+[tool.poe.tasks._can_deploy]
+help = "Test to see if the project can be deployed"
+script = "_scripts.deploy:poe_can_deploy()"
+
+[tool.poe.tasks._deploy]
+help = "Deploy the project"
+script = "_scripts.deploy:deploy()"
+print_result = true
+
+[tool.poe.tasks.deploy]
+help = "Test, build, and deploy the project"
+sequence = ["_can_deploy", "test", "build", "_deploy", "bump_patch"]
+
+[tool.poe.tasks.bump_major]
+help = "Bump project's major version"
+cmd = "poetry version major"
+
+[tool.poe.tasks.bump_minor]
+help = "Bump project's minor version"
+cmd = "poetry version minor"
+
+[tool.poe.tasks.bump_patch]
+help = "Bump project's patch version"
+cmd = "poetry version patch"
+
+
+[tool.coverage]
+[tool.coverage.run]
+source = ["data_pull_tools"]
+# omit = ["_example_data.py"]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "if __name__ == .__main__.:",
+    "def __repr__",
+    "raise AssertionError",
+    "raise NotImplementedError",
+]
+
+
+[tool.isort]
+profile = "black"
+
+
+[build-system]
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"

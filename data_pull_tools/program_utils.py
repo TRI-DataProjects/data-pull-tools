@@ -6,7 +6,6 @@ import pandas as pd
 
 
 def prog_has_rates_caps(df: pd.DataFrame, age_details: pd.DataFrame) -> pd.DataFrame:
-
     rate_columns = [
         x for x in age_details.columns if isinstance(x, str) and "Rate" in x
     ]
@@ -57,7 +56,10 @@ def prog_has_rates_caps(df: pd.DataFrame, age_details: pd.DataFrame) -> pd.DataF
     return df
 
 
-def invalid_programs_mask(df: pd.DataFrame, filter_status: bool = True) -> pd.Series:
+def invalid_programs_mask(
+    df: pd.DataFrame,
+    filter_status: bool = True,
+) -> pd.Series[bool]:
     invalid_masks = {
         "Status": (df["Status"] != "Active"),
         "TEST In License": (
@@ -89,7 +91,6 @@ def remove_invalid_programs(
     df: pd.DataFrame,
     filter_status: bool = True,
 ) -> pd.DataFrame:
-    # Filter programs
     mask = invalid_programs_mask(
         df=df,
         filter_status=filter_status,
@@ -253,7 +254,7 @@ class SDA_Code(Enum):
     LANE = Region_SDA("Lane", 6)
     SOUTH_CENTRAL = Region_SDA("South Central", 7)
     SOUTH_COAST = Region_SDA("South Coast", 8)
-    SOURTHERN = Region_SDA("Southern", 9)
+    SOUTHERN = Region_SDA("Southern", 9)
     THE_GORGE = Region_SDA("The Gorge", 10)
     GRANT_HARNEY = Region_SDA("Grant-Harney", 11)
     CENTRAL = Region_SDA("Central", 12)

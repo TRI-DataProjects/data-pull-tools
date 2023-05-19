@@ -2,7 +2,6 @@ import pandas as pd
 
 
 def _get_company_quarterly_df() -> pd.DataFrame:
-
     col = [
         "Company",
         "Year 1",

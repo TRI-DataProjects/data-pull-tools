@@ -1,12 +1,11 @@
 import errno
 import os
 from abc import ABC, abstractmethod
+from collections.abc import Callable
 from pathlib import Path
-from typing import Callable
 
 import pandas as pd
-
-from .file_utils import hide_file
+from file_utils import hide_file
 
 
 class Cacher(ABC):
