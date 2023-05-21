@@ -1,12 +1,4 @@
 [tool]
-
-[tool._scripts]
-win_deploy_paths = [
-    "\\\\groupr.wou.edu\\groupr\\tri\\Train\\Data-Team\\dist",
-    "I:\\Train\\Data-Team\\dist",
-]
-posix_deploy_paths = []
-
 [tool.poetry]
 name = "data_pull_tools"
 version = "0.1.1"
