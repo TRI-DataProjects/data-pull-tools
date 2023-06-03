@@ -15,7 +15,7 @@ ftfy = "^6.1.1"
 ipython = "^8.13.2"
 openpyxl = "^3.1.2"
 pandas = "^2.0.1"
-pywin32 = "^306"
+pywin32 = { version = "^306", markers = "sys_platform == \"win32\"" }
 rich = "^13.3.5"
 tomlkit = "^0.11.8"
 
