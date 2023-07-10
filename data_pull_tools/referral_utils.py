@@ -94,7 +94,6 @@ def parse_referral_chunk(df: DataFrame) -> list[dict]:
 
 def multiprocess_referral_notes(df: DataFrame) -> DataFrame:
     chunk_size = 100
-    results = []
 
     with ProcessPoolExecutor() as executor:
         splits = list(range(chunk_size, len(df.index), chunk_size))
