@@ -4,6 +4,8 @@ from enum import Enum
 import numpy as np
 import pandas as pd
 
+from data_pull_tools.region_utils import Regions
+
 
 def prog_has_rates_caps(df: pd.DataFrame, age_details: pd.DataFrame) -> pd.DataFrame:
     rate_columns = [
@@ -239,96 +241,11 @@ def type_code_programs(df: pd.DataFrame, dropna: bool = False) -> pd.DataFrame:
     return df
 
 
-@dataclass(frozen=True)
-class Region:
-    region: str
-    sda: int
-    counties: list[str]
-
-
-class Regions(Enum):
-    BLUE_MOUNTAIN = Region(
-        "Blue Mountain",
-        1,
-        ["Morrow", "Umatilla", "Union"],
-    )
-    MULTNOMAH = Region(
-        "Multnomah",
-        2,
-        ["Multnomah"],
-    )
-    MPY = Region(
-        "Marion-Polk-Yamhill",
-        3,
-        ["Marion", "Polk", "Yamhill"],
-    )
-    NORTH_COAST = Region(
-        "North Coast",
-        4,
-        ["Clastop", "Tillamook", "Columbia"],
-    )
-    LBL = Region(
-        "Linn-Benton-Lincoln",
-        5,
-        ["Linn", "Benton", "Lincoln"],
-    )
-    LANE = Region(
-        "Lane",
-        6,
-        ["Lane"],
-    )
-    SOUTH_CENTRAL = Region(
-        "South Central",
-        7,
-        ["Douglas", "Klamath", "Lake"],
-    )
-    SOUTH_COAST = Region(
-        "South Coast",
-        8,
-        ["Coos", "Curry"],
-    )
-    SOUTHERN = Region(
-        "Southern",
-        9,
-        ["Jackson", "Josephine"],
-    )
-    THE_GORGE = Region(
-        "The Gorge",
-        10,
-        ["Gilliam", "Hood River", "Sherman", "Wasco", "Wheeler"],
-    )
-    GRANT_HARNEY = Region(
-        "Grant-Harney",
-        11,
-        ["Grant", "Harney"],
-    )
-    CENTRAL = Region(
-        "Central",
-        12,
-        ["Crook", "Deschutes", "Jefferson"],
-    )
-    EASTERN = Region(
-        "Eastern",
-        14,
-        ["Baker", "Malheur", "Wallowa"],
-    )
-    CLACKAMAS = Region(
-        "Clackamas",
-        15,
-        ["Clackamas"],
-    )
-    WASHINGTON = Region(
-        "Washington",
-        16,
-        ["Washington"],
-    )
-
-
 def sda_code_programs(df: pd.DataFrame) -> pd.DataFrame:
     masks: dict[int, pd.Series[bool]] = {}
-    for code in Regions:
-        sda = code.value.sda
-        region = code.value.region
+    for region in Regions:
+        sda = region.value.sda
+        region = region.value.region
         masks[sda] = (df["Region"].str.strip() == region).fillna(False)
 
     # Break into component parts for numpy
