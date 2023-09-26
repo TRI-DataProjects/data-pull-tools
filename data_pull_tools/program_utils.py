@@ -343,7 +343,7 @@ class Age_Ranges(Enum):
     SCHOOL_AGE = Age_Range("School Age", 5 * MONTHS_PER_YEAR, None)
 
 
-def care_for_flag_from_weeks(df: pd.DataFrame) -> pd.DataFrame:
+def care_for_flag_from_total_months(df: pd.DataFrame) -> pd.DataFrame:
     from_months = "Care For Ages From Total Months"
     to_months = "Care For Ages To Total Months"
 
