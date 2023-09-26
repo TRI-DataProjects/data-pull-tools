@@ -7,6 +7,15 @@ import pandas as pd
 from data_pull_tools.region_utils import Regions
 
 
+def dhs_to_odhs_names(df: pd.DataFrame) -> pd.DataFrame:
+    renamer = {
+        name: name.replace("DHS", "ODHS")
+        for name in df.columns
+        if "DHS" in name and "ODHS" not in name
+    }
+    return df.rename(columns=renamer)
+
+
 def prog_has_rates_caps(df: pd.DataFrame, age_details: pd.DataFrame) -> pd.DataFrame:
     rate_columns = [
         x for x in age_details.columns if isinstance(x, str) and "Rate" in x
@@ -63,20 +72,24 @@ def invalid_programs_mask(
     filter_status: bool = True,
 ) -> pd.Series[bool]:
     invalid_masks = {
-        "Status": (df["Status"] != "Active"),
-        "TEST In License": (
-            df["License"].str.contains("TEST", regex=False, case=False)
+        "Status": df["Status"] != "Active",
+        "TEST In License": df["License"].str.contains(
+            "TEST",
+            regex=False,
+            case=False,
         ),
-        "DUPLICATE In License": (
-            df["License"].str.contains("DUPLICATE", regex=False, case=False)
+        "DUPLICATE In License": df["License"].str.contains(
+            "DUPLICATE",
+            regex=False,
+            case=False,
         ),
-        "Early Learning Hub": (
-            df["Provider Type"].str.contains(
-                "Early Learning Hub", regex=False, case=False
-            )
+        "Early Learning Hub": df["Provider Type"].str.contains(
+            "Early Learning Hub",
+            regex=False,
+            case=False,
         ),
-        "Empty Regulation": (df["Regulation"].isna()),
-        "Empty Business Name": (df["Business Name"] == ", "),
+        "Empty Regulation": df["Regulation"].isna(),
+        "Empty Business Name": df["Business Name"] == ", ",
     }
 
     if not filter_status:
@@ -218,7 +231,7 @@ def type_code_programs(df: pd.DataFrame, dropna: bool = False) -> pd.DataFrame:
             & ~(masks[Col.PROG_TYPES]["PS"] ^ masks[Col.PROG_TYPES]["SA"])
             & (masks[Col.REG]["UN"])
         ),
-        "FE": ((masks[Col.PROV_TYPE]["License Exempt Home"]) & (masks[Col.REG]["UN"])),
+        "FE": (masks[Col.PROV_TYPE]["License Exempt Home"]) & (masks[Col.REG]["UN"]),
     }
 
     # Break into component parts for numpy
@@ -290,11 +303,19 @@ def flag_program_types(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
+WEEKS_PER_YEAR = 365.2425 / 7.0  # = 52.1775
+WEEKS_PER_MONTH = WEEKS_PER_YEAR / 12.0  # = 4.348125
+
+
 def care_for_ages_to_weeks(df: pd.DataFrame) -> pd.DataFrame:
     p_from = "Care For Ages From"
     p_to = "Care For Ages To"
-    df[f"{p_from} Weeks"] = (df[f"{p_from} Months"] * 4) + (df[f"{p_from} Years"] * 52)
-    df[f"{p_to} Weeks"] = (df[f"{p_to} Months"] * 4) + (df[f"{p_to} Years"] * 52)
+    df[f"{p_from} Weeks"] = (df[f"{p_from} Months"] * WEEKS_PER_MONTH) + (
+        df[f"{p_from} Years"] * WEEKS_PER_YEAR
+    )
+    df[f"{p_to} Weeks"] = (df[f"{p_to} Months"] * WEEKS_PER_MONTH) + (
+        df[f"{p_to} Years"] * WEEKS_PER_YEAR
+    )
 
     return df
 
@@ -302,8 +323,8 @@ def care_for_ages_to_weeks(df: pd.DataFrame) -> pd.DataFrame:
 @dataclass(frozen=True)
 class Age_Range:
     label: str
-    lower_bound: int
-    upper_bound: int | None
+    lower_bound: float
+    upper_bound: float | None
 
     def to_col_name(self) -> str:
         label = self.label
@@ -311,16 +332,16 @@ class Age_Range:
         u_bound = self.upper_bound
 
         if u_bound is not None:
-            return f"{label} ({l_bound}-{u_bound})"
+            return f"{label} ({round(l_bound)}-{round(u_bound)})"
         else:
-            return f"{label} ({l_bound}+)"
+            return f"{label} ({round(l_bound)}+)"
 
 
 class Age_Ranges(Enum):
-    INFANT = Age_Range("Infant", 0, 2 * 52)
-    TODDLER = Age_Range("Toddler", 2 * 52, 3 * 52)
-    PRESCHOOL = Age_Range("Preschool", 3 * 52, 5 * 52)
-    SCHOOL_AGE = Age_Range("School Age", 5 * 52, None)
+    INFANT = Age_Range("Infant", 0, 2 * WEEKS_PER_YEAR)
+    TODDLER = Age_Range("Toddler", 2 * WEEKS_PER_YEAR, 3 * WEEKS_PER_YEAR)
+    PRESCHOOL = Age_Range("Preschool", 3 * WEEKS_PER_YEAR, 5 * WEEKS_PER_YEAR)
+    SCHOOL_AGE = Age_Range("School Age", 5 * WEEKS_PER_YEAR, None)
 
 
 def care_for_flag_from_weeks(df: pd.DataFrame) -> pd.DataFrame:
