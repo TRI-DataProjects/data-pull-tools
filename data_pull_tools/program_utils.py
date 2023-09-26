@@ -303,18 +303,17 @@ def flag_program_types(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
-WEEKS_PER_YEAR = 365.2425 / 7.0  # = 52.1775
-WEEKS_PER_MONTH = WEEKS_PER_YEAR / 12.0  # = 4.348125
+MONTHS_PER_YEAR = 12
 
 
-def care_for_ages_to_weeks(df: pd.DataFrame) -> pd.DataFrame:
+def care_for_ages_total_months(df: pd.DataFrame) -> pd.DataFrame:
     p_from = "Care For Ages From"
     p_to = "Care For Ages To"
-    df[f"{p_from} Weeks"] = (df[f"{p_from} Months"] * WEEKS_PER_MONTH) + (
-        df[f"{p_from} Years"] * WEEKS_PER_YEAR
+    df[f"{p_from} Total Months"] = (df[f"{p_from} Months"]) + (
+        df[f"{p_from} Years"] * MONTHS_PER_YEAR
     )
-    df[f"{p_to} Weeks"] = (df[f"{p_to} Months"] * WEEKS_PER_MONTH) + (
-        df[f"{p_to} Years"] * WEEKS_PER_YEAR
+    df[f"{p_to} Total Months"] = (df[f"{p_to} Months"]) + (
+        df[f"{p_to} Years"] * MONTHS_PER_YEAR
     )
 
     return df
@@ -338,19 +337,19 @@ class Age_Range:
 
 
 class Age_Ranges(Enum):
-    INFANT = Age_Range("Infant", 0, 2 * WEEKS_PER_YEAR)
-    TODDLER = Age_Range("Toddler", 2 * WEEKS_PER_YEAR, 3 * WEEKS_PER_YEAR)
-    PRESCHOOL = Age_Range("Preschool", 3 * WEEKS_PER_YEAR, 5 * WEEKS_PER_YEAR)
-    SCHOOL_AGE = Age_Range("School Age", 5 * WEEKS_PER_YEAR, None)
+    INFANT = Age_Range("Infant", 0, 2 * MONTHS_PER_YEAR)
+    TODDLER = Age_Range("Toddler", 2 * MONTHS_PER_YEAR, 3 * MONTHS_PER_YEAR)
+    PRESCHOOL = Age_Range("Preschool", 3 * MONTHS_PER_YEAR, 5 * MONTHS_PER_YEAR)
+    SCHOOL_AGE = Age_Range("School Age", 5 * MONTHS_PER_YEAR, None)
 
 
 def care_for_flag_from_weeks(df: pd.DataFrame) -> pd.DataFrame:
-    from_weeks = "Care For Ages From Weeks"
-    to_weeks = "Care For Ages To Weeks"
+    from_months = "Care For Ages From Total Months"
+    to_months = "Care For Ages To Total Months"
 
-    valid_range_mask = ((df[to_weeks] != 0) & (df[from_weeks] != df[to_weeks])).fillna(
-        False
-    )
+    valid_range_mask = (
+        (df[to_months] != 0) & (df[from_months] != df[to_months])
+    ).fillna(False)
 
     df["Unknown Care Range"] = ~valid_range_mask
 
@@ -361,9 +360,9 @@ def care_for_flag_from_weeks(df: pd.DataFrame) -> pd.DataFrame:
 
         mask = valid_range_mask.copy()
 
-        mask &= (l_bound <= df[to_weeks]).fillna(False)
+        mask &= (l_bound <= df[to_months]).fillna(False)
         if u_bound is not None:
-            mask &= (df[from_weeks] < u_bound).fillna(False)
+            mask &= (df[from_months] < u_bound).fillna(False)
 
         df[a_range.to_col_name()] = mask
 
