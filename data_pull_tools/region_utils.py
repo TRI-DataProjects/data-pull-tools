@@ -28,7 +28,7 @@ class Regions(Enum):
     NORTH_COAST = Region(
         "North Coast",
         4,
-        ["Clastop", "Tillamook", "Columbia"],
+        ["Clatsop", "Tillamook", "Columbia"],
     )
     LBL = Region(
         "Linn-Benton-Lincoln",
