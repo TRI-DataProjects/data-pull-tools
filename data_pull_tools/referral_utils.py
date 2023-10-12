@@ -15,6 +15,7 @@ from data_pull_tools.cached_excel_reader import CachedExcelReader
 StrPath = Union[str, PathLike[str]]
 _search_in_minute = "Referral Search Number In Minute"
 _row_key = ["ReferralID", "Date of Action", _search_in_minute]
+_max_searches_per_minute = 10
 
 
 def process_referral_action_logs(df: DataFrame) -> DataFrame:
@@ -25,7 +26,8 @@ def process_referral_action_logs(df: DataFrame) -> DataFrame:
     date_fmt: str = r"%m/%d/%Y %I:%M %p"
     df["Date of Action"] = pd.to_datetime(df["Date of Action"], format=date_fmt)
 
-    # Assign each referral's search a number
+    # Assign each referral's search a unique number
+    # This number is not ordinal and solely an identifier
     df[_search_in_minute] = (
         df.sort_values(["Date of Action"], ascending=[True])
         .groupby(["ReferralID", "Date of Action"])
@@ -55,16 +57,17 @@ def clean_referral_action_logs(df: DataFrame) -> DataFrame:
     df = df.drop_duplicates()
 
     group = ["ReferralID", "Date of Action"]
-    mask = df[_search_in_minute] > 10
-    erroneous_uniques = (
+    mask = df[_search_in_minute] > _max_searches_per_minute
+    # Find all groups of records that have too many searches per minute
+    erroneous_groups = (
         df.loc[mask, group]
         .groupby(group)
         .size()
         .reset_index(name="Count")
         .drop("Count", axis=1)
     )
-    df = pd.merge(df, erroneous_uniques, how="outer", on=group, indicator=True)
-    # Only keep records not part of the erroneous_uniques set
+    df = pd.merge(df, erroneous_groups, how="outer", on=group, indicator=True)
+    # Only keep record groups not part of the erroneous_groups set
     df = df[df["_merge"] == "left_only"]
     return df.drop("_merge", axis=1)
 
