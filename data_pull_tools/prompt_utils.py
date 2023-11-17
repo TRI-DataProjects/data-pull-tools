@@ -1,11 +1,16 @@
-import os
-from collections.abc import Callable
-from pathlib import Path
-from typing import Any, TextIO
+from __future__ import annotations
 
-from rich.console import Console
-from rich.prompt import DefaultType, InvalidResponse, PromptBase, PromptType
+import os
+from pathlib import Path
+from typing import TYPE_CHECKING, TextIO
+
+from rich.prompt import InvalidResponse, PromptBase, PromptType
 from rich.text import Text, TextType
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
+
+    from rich.console import Console
 
 
 class ExecutableOption:
@@ -21,33 +26,18 @@ class ExecutableOption:
         self.action = action
         self.exits = exits
 
-    ...
-
 
 class MultilinePrompt(PromptBase[PromptType]):
     post_prompt: TextType = "Enter your selection"
     row_prefix: TextType = ""
 
-    def make_prompt(self, default: DefaultType) -> Text:
-        """Make prompt text.
-
-        Args:
-            default (DefaultType): Default value.
-
-        Returns:
-            Text: Text to display in prompt.
-        """
+    def make_prompt(self, default: PromptType) -> Text:
         prompt = self.prompt.copy()
         prompt.end = ""
 
         if self.show_choices and self.choices:
             row_prefix = Text("\n").append(self.row_prefix)
-            _choices = list(
-                map(
-                    lambda choice: Text(choice, "prompt.choices"),
-                    self.choices,
-                )
-            )
+            _choices = [Text(choice, "prompt.choices") for choice in self.choices]
             choices = row_prefix.append(row_prefix.join(_choices))
             prompt.append(choices)
             prompt.append("\n")
@@ -68,7 +58,7 @@ class MultilinePrompt(PromptBase[PromptType]):
         return prompt
 
 
-class SynonymPrompt(MultilinePrompt, PromptBase[str]):
+class SynonymPrompt(MultilinePrompt[str]):
     def __init__(
         self,
         *,
@@ -92,7 +82,7 @@ class SynonymPrompt(MultilinePrompt, PromptBase[str]):
 
     @classmethod
     def ask(
-        cls,
+        cls: type[SynonymPrompt],
         *,
         prompt: TextType = "",
         choices: dict[str, str],
@@ -100,9 +90,9 @@ class SynonymPrompt(MultilinePrompt, PromptBase[str]):
         password: bool = False,
         show_default: bool = True,
         show_choices: bool = True,
-        default: Any = ...,
+        default: str = ...,
         stream: TextIO | None = None,
-    ) -> Any:
+    ) -> str:
         _prompt = cls(
             prompt=prompt,
             console=console,
@@ -114,11 +104,13 @@ class SynonymPrompt(MultilinePrompt, PromptBase[str]):
         return _prompt(default=default, stream=stream)
 
     def check_choice(self, value: str) -> bool:
-        assert self.choice_keys is not None
+        if self.choice_keys is None:
+            msg = "Expected a list of valid choices but none were provided."
+            raise ValueError(msg)
         return value.strip().lower() in map(str.lower, self.choice_keys)
 
 
-class ExecutablePrompt(MultilinePrompt, PromptBase[None]):
+class ExecutablePrompt(MultilinePrompt[None]):
     def __init__(
         self,
         *,
@@ -143,7 +135,7 @@ class ExecutablePrompt(MultilinePrompt, PromptBase[None]):
 
     @classmethod
     def ask(
-        cls,
+        cls: type[ExecutablePrompt],
         *,
         prompt: TextType = "",
         choices: list[ExecutableOption],
@@ -151,9 +143,9 @@ class ExecutablePrompt(MultilinePrompt, PromptBase[None]):
         password: bool = False,
         show_default: bool = True,
         show_choices: bool = True,
-        default: Any = ...,
+        default: None = ...,
         stream: TextIO | None = None,
-    ) -> Any:
+    ) -> None:
         _prompt = cls(
             prompt=prompt,
             console=console,
@@ -165,8 +157,10 @@ class ExecutablePrompt(MultilinePrompt, PromptBase[None]):
         return _prompt(default=default, stream=stream)
 
     def check_choice(self, value: str) -> bool:
-        assert self.action_dict.keys() is not None
-        return value in self.action_dict.keys()
+        if self.action_dict.keys() is None:
+            msg = "Expected a list of valid actions but none were provided."
+            raise ValueError(msg)
+        return value in self.action_dict
 
     def process_response(self, value: str) -> bool:
         value = value.strip().upper()
@@ -180,13 +174,14 @@ class ExecutablePrompt(MultilinePrompt, PromptBase[None]):
 
         return self.exits_dict[value]
 
-    def __call__(self, *, default: Any = ..., stream: TextIO | None = None) -> None:
+    def __call__(self, *, default: None = ..., stream: TextIO | None = None) -> None:
         """Run the prompt loop.
 
         Args:
             default (Any, optional): Optional default value.
 
-        Returns:
+        Returns
+        -------
             PromptType: Processed value.
         """
         exits = False
@@ -238,7 +233,7 @@ class PathPrompt(PromptBase[Path]):
 
     @classmethod
     def ask(
-        cls,
+        cls: type[PathPrompt],
         prompt: TextType = "",
         root: Path | None = None,
         *,
@@ -267,7 +262,7 @@ class PathPrompt(PromptBase[Path]):
     def process_response(self, value: str) -> Path:
         return_value = self.root / (value.strip())
 
-        if not os.path.exists(return_value):
+        if not return_value.exists():
             raise InvalidResponse(self.validate_error_message)
 
         if self.choices is not None and not self.check_choice(value):
@@ -282,7 +277,7 @@ class FilePrompt(PathPrompt):
     def process_response(self, value: str) -> Path:
         return_value = super().process_response(value)
 
-        if not os.path.isfile(return_value):
+        if not return_value.is_file():
             raise InvalidResponse(self.validate_error_message)
 
         return return_value
@@ -294,7 +289,7 @@ class DirPrompt(PathPrompt):
     def process_response(self, value: str) -> Path:
         return_value = super().process_response(value)
 
-        if not os.path.isdir(return_value):
+        if not return_value.is_dir():
             raise InvalidResponse(self.validate_error_message)
 
         return return_value
@@ -318,13 +313,11 @@ class MultilineSubdirPrompt(MultilineDirPrompt):
         if root is None:
             root = Path()
 
-        dir_names = list()
-        for entry in os.scandir(root):
-            if entry.is_dir():
-                dir_names.append(entry.name)
+        dir_names = [entry.name for entry in os.scandir(root) if entry.is_dir()]
 
         if len(dir_names) == 0:
-            raise FileNotFoundError(f"No subfolders exist for: {root}")
+            msg = f"No subfolders exist for: {root}"
+            raise FileNotFoundError(msg)
 
         dir_names.sort()
 
@@ -340,7 +333,7 @@ class MultilineSubdirPrompt(MultilineDirPrompt):
 
     @classmethod
     def ask(
-        cls,
+        cls: type[MultilineSubdirPrompt],
         prompt: TextType = "",
         root: Path | None = None,
         *,
@@ -348,9 +341,9 @@ class MultilineSubdirPrompt(MultilineDirPrompt):
         password: bool = False,
         show_default: bool = True,
         show_choices: bool = True,
-        default: Any = ...,
+        default: Path = ...,
         stream: TextIO | None = None,
-    ) -> Any:
+    ) -> Path:
         if root is None:
             root = Path()
 
@@ -382,13 +375,12 @@ class MultilineSubfilePrompt(MultilineFilePrompt):
     ) -> None:
         if root is None:
             root = Path()
-        file_names = list()
-        for entry in os.scandir(root):
-            if entry.is_file():
-                file_names.append(entry.name)
+
+        file_names = [entry.name for entry in os.scandir(root) if entry.is_file()]
 
         if len(file_names) == 0:
-            raise FileNotFoundError(f"No files exist in dir: {root}")
+            msg = f"No files exist in dir: {root}"
+            raise FileNotFoundError(msg)
 
         super().__init__(
             prompt,
@@ -402,7 +394,7 @@ class MultilineSubfilePrompt(MultilineFilePrompt):
 
     @classmethod
     def ask(
-        cls,
+        cls: type[MultilineSubfilePrompt],
         prompt: TextType = "",
         root: Path | None = None,
         *,
@@ -410,9 +402,9 @@ class MultilineSubfilePrompt(MultilineFilePrompt):
         password: bool = False,
         show_default: bool = True,
         show_choices: bool = True,
-        default: Any = ...,
+        default: Path = ...,
         stream: TextIO | None = None,
-    ) -> Any:
+    ) -> Path:
         if root is None:
             root = Path()
         _prompt = cls(

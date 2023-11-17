@@ -1,4 +1,7 @@
+from __future__ import annotations
+
 import json
+import sys
 import timeit
 from collections.abc import Mapping
 from concurrent.futures import ProcessPoolExecutor
@@ -66,7 +69,7 @@ def clean_referral_action_logs(df: DataFrame) -> DataFrame:
         .reset_index(name="Count")
         .drop("Count", axis=1)
     )
-    df = pd.merge(df, erroneous_groups, how="outer", on=group, indicator=True)
+    df = df.merge(erroneous_groups, how="outer", on=group, indicator=True)
     # Only keep record groups not part of the erroneous_groups set
     df = df[df["_merge"] == "left_only"]
     return df.drop("_merge", axis=1)
@@ -89,7 +92,7 @@ def parse_referral_chunk(df: DataFrame) -> list[dict]:
                     right=pd.json_normalize(obj["Filters"]),
                     how="cross",
                 )
-                .to_dict(orient="records")
+                .to_dict(orient="records"),
             )
 
     return list_notes
@@ -121,16 +124,19 @@ def process_referrals(
 
     if isinstance(process_mode, bool):
         if not process_mode:
-            raise ValueError(f"process_mode of '{process_mode}' not supported.")
-        frames = []
-        for entry in scandir(referrals_root):
-            if entry.is_file and entry.name.endswith(".xlsx"):
-                frames.append(excel_reader.read_excel(entry.name))
+            msg = f"process_mode of '{process_mode}' not supported."
+            raise ValueError(msg)
+        frames = [
+            excel_reader.read_excel(entry.name)
+            for entry in scandir(referrals_root)
+            if entry.is_file and entry.name.endswith(".xlsx")
+        ]
         df = pd.concat(frames, ignore_index=True).convert_dtypes()
     elif isinstance(process_mode, str):
         df: DataFrame = excel_reader.read_excel(process_mode).convert_dtypes()
     else:
-        raise ValueError(f"process_mode of '{process_mode}' not supported.")
+        msg = f"process_mode of '{process_mode}' not supported."
+        raise TypeError(msg)
 
     elapsed: float = timeit.default_timer() - st_time
 
@@ -160,7 +166,8 @@ def process_referrals(
 
     print("Saving referrals")
     df.drop("Notes", axis=1).to_csv(
-        referrals_root / r"ProcessedReferrals.csv", index=False
+        referrals_root / r"ProcessedReferrals.csv",
+        index=False,
     )
     print("Save successful")
 
@@ -174,7 +181,7 @@ def process_referrals(
     print(f"Parsed {from_rows} referrals with {to_rows} filters in {elapsed:.3f}s")
 
     print("Saving filters")
-    notes.to_csv(referrals_root / r"FiltersOnly.csv", index=False)
+    notes.to_csv(referrals_root / r"ProcessedReferralFiltersOnly.csv", index=False)
     print("Save successful")
 
 
@@ -182,7 +189,6 @@ if __name__ == "__main__":
     from prompt_utils import DirPrompt, FilePrompt
     from rich.pretty import pprint
     from rich.prompt import Confirm
-    from toml_utils import LoadTOML
 
     ref_root: Path | None = None
     process_mode: str | bool | None = None
@@ -190,11 +196,13 @@ if __name__ == "__main__":
     # Try to load a sibling config file
     config_path = Path(__file__).parent / "referral_config.toml"
     if config_path.exists():
-        config = LoadTOML(config_path)
-        if "process_mode" in config:
-            process_mode = config["process_mode"]
+        from toml_utils import load_toml
+
+        config = load_toml(config_path)
         if "referral_root" in config:
             ref_root = Path(config["referral_root"])
+        if "process_mode" in config:
+            process_mode = config["process_mode"]
 
     # Prompt user for any settings not loaded
     if ref_root is None:
@@ -203,17 +211,16 @@ if __name__ == "__main__":
     if process_mode is None:
         if Confirm.ask("Are you processing a single file?"):
             process_mode = FilePrompt.ask("Please enter the file name", ref_root).name
+        elif Confirm.ask(f"Process all Excel files in '{ref_root}'"):
+            process_mode = True
         else:
-            if Confirm.ask(f"Process all Excel files in '{ref_root}'"):
-                process_mode = True
-            else:
-                print("Cannot proceed with given configuration of:")
-                print("config_path: ", end="")
-                pprint(config_path)
-                print("process_mode: ", end="")
-                pprint(process_mode)
-                print("Exiting")
-                exit(1)
+            print("Cannot proceed with given configuration of:")
+            print("config_path: ", end="")
+            pprint(config_path)
+            print("process_mode: ", end="")
+            pprint(process_mode)
+            print("Exiting")
+            sys.exit(1)
 
     # Process those referrals!
     process_referrals(ref_root, process_mode)
