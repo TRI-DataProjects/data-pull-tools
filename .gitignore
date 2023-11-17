@@ -175,7 +175,7 @@ Output/*
 #  Files open in Excel
 ~$*
 
-#  Custom toml for running referral_utils directly
-data_pull_tools/referral_config.toml
+#  Custom toml settings for running some utils directly
+data_pull_tools/*.toml
 
 coverage/*
