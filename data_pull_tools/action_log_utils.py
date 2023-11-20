@@ -19,22 +19,38 @@ def process_action_logs(
 ) -> None:
     st_time: float = timeit.default_timer()
 
-    if process_mode == "batch":
-        excel_reader = CachedExcelReader(process_root)
-        frames = [
-            excel_reader.read_excel(entry.name)
-            for entry in scandir(process_root)
-            if entry.name.endswith(".xlsx")
-        ]
-        action_logs = pd.concat(frames, ignore_index=True).convert_dtypes()
-    else:
-        excel_reader = CachedExcelReader(process_root.parent)
-        action_logs = excel_reader.read_excel(process_root.name).convert_dtypes()
+    process_dir = process_root if process_mode == "batch" else process_root.parent
+    excel_reader = CachedExcelReader(process_dir)
+
+    frames = [
+        excel_reader.read_excel(entry.name)
+        for entry in scandir(process_root)
+        if entry.name.endswith(".xlsx")
+    ]
+    action_logs = pd.concat(frames, ignore_index=True).convert_dtypes()
 
     elapsed: float = timeit.default_timer() - st_time
     n_read: int = len(action_logs.index)
     noun: str = "row" if n_read == 1 else "rows"
     print(f"Read {n_read} {noun} in {elapsed:.3f}s")
+
+    renamer = {
+        "WLS ID": "Program ID",
+        "Date of Action": "Action Date",
+    }
+
+    out_cols = [
+        "Program ID",
+        "Recorded By",
+        "Recorded Date",
+        "Action Date",
+        "Action Log Name",
+        "Action Log Type",
+        "Notes",
+    ]
+
+    action_logs = action_logs.rename(columns=renamer)[out_cols]
+    action_logs.to_csv(process_dir / "output.csv", index=False)
 
 
 if __name__ == "__main__":
