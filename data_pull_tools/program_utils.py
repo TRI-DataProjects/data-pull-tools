@@ -136,7 +136,9 @@ def type_code_programs(df: pd.DataFrame, dropna: bool = False) -> pd.DataFrame:
         Col.PROG_TYPES: {
             "PS": df[Col.PROG_TYPES].str.contains("Preschool", regex=False, case=False),
             "SA": df[Col.PROG_TYPES].str.contains(
-                "School Age", regex=False, case=False
+                "School Age",
+                regex=False,
+                case=False,
             ),
         },
         Col.LIC: {

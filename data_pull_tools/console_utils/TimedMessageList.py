@@ -26,7 +26,7 @@ class TimedMessageList:
         if len(self.messages) == 0:
             return f"{self.__class__.__name__}([])"
         if len(self.messages) == 1:
-            return f"{self.__class__.__name__}([{repr(self.messages[0])}])"
+            return f"{self.__class__.__name__}([{self.messages[0]!r}])"
         sep = ",\n\t"
         return (
             f"{self.__class__.__name__}([\n"
@@ -110,9 +110,8 @@ class TimedMessageList:
 
 
 if __name__ == "__main__":
-    from rich.text import Text
-
     from data_pull_tools.console_utils.TimedMessageUtils import slow_input
+    from rich.text import Text
 
     while True:
         TimedMessageList(
@@ -144,7 +143,7 @@ if __name__ == "__main__":
                     None,
                     "",
                 ),
-            ]
+            ],
         ).print_messages()
         response = input()
 
@@ -154,7 +153,7 @@ if __name__ == "__main__":
                 ("Curious", None, 0, ""),
                 (" . . .", 0.5, 2, ""),
                 ("\nNerd", 0),
-            ]
+            ],
         )
 
         print(x)

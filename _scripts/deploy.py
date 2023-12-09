@@ -1,9 +1,8 @@
 from pathlib import Path
 from typing import Any
 
-from git.repo import Repo
-
 from data_pull_tools.toml_utils import CachedTOMLReader
+from git.repo import Repo
 
 _reader = CachedTOMLReader()
 _project_root = Path(__file__).parent.parent
@@ -29,21 +28,18 @@ def deploy() -> bool:
 
 
 def poe_can_deploy() -> None:
-    """Raise a SystemExit error if poe should not deploy the package"""
-
+    """Raise a SystemExit error if poe should not deploy the package."""
     repo = Repo(_project_root)
     poetry = load_pyproject()["tool"]["poetry"]
 
     if repo.is_dirty():
-        raise SystemExit(
-            "Cannot deploy, current repo is dirty. Please commit all changes first."
-        )
+        msg = "Cannot deploy, current repo is dirty. Please commit all changes first."
+        raise SystemExit(msg)
 
     tag_name = v_tag_name(poetry)
     if tag_name in repo.tags:
-        raise SystemExit(
-            f"Cannot deploy, version {poetry['version']} has already been deployed."
-        )
+        msg = f"Cannot deploy, version {poetry['version']} has already been deployed."
+        raise SystemExit(msg)
 
 
 if __name__ == "__main__":

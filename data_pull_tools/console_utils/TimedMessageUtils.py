@@ -1,6 +1,5 @@
-from rich.text import Text
-
 from data_pull_tools.console_utils.TimedMessage import TimedString, TimedText
+from rich.text import Text
 
 TimedMessageLike = TimedText | TimedString
 TextType = Text | str
@@ -43,6 +42,6 @@ def slow_input(
             print_rate,
             pause_after,
             end,
-        )
+        ),
     ).print()
     return input()

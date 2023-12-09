@@ -109,7 +109,7 @@ class CleaningInferrer(IndexInferrer):
         if pattern is not None:
             cols_df = cols_df.applymap(lambda x: pattern.sub(repl, x))
 
-        for idx in range(0, len(cols_list)):
+        for idx in range(len(cols_list)):
             data = cols_list[idx]
             column = cols_df.iloc[:, idx]
             col_matches = True
