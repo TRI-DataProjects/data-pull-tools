@@ -1,44 +1,53 @@
+"""Module for processing action logs."""
+
 from __future__ import annotations
 
+import logging
 import timeit
-from os import scandir
 from pathlib import Path
 from typing import Literal
 
-import pandas as pd
+from platformdirs import user_downloads_dir
 
-from data_pull_tools.cached_excel_reader import CachedExcelReader
+from data_pull_tools.cached_excel_reader import CachedExcelReader, ParquetCacher
+from data_pull_tools.partial_collector import PartialCollector
 from data_pull_tools.prompt_utils import DirPrompt
 
 ProcessMode = Literal["single", "batch"]
+module_logger = logging.getLogger(__name__)
 
 
 def process_action_logs(
     process_mode: ProcessMode,
     process_root: Path,
 ) -> None:
+    """
+    Process action logs from Excel files and save the result to a CSV file.
+
+    Parameters
+    ----------
+    process_mode : ProcessMode
+        The processing mode, either 'batch' or 'single'.
+    process_root : Path
+        The root path for processing, either the batch directory or a
+    single file.
+
+    Returns
+    -------
+    None
+
+    Examples
+    --------
+    >>> process_action_logs(ProcessMode.BATCH, Path("data/batch_logs"))
+
+    >>> process_action_logs(ProcessMode.SINGLE, Path("data/single_log.xlsx"))
+    """
     st_time: float = timeit.default_timer()
-
-    process_dir = process_root if process_mode == "batch" else process_root.parent
-    excel_reader = CachedExcelReader(process_dir)
-
-    frames = [
-        excel_reader.read_excel(entry.name)
-        for entry in scandir(process_root)
-        if entry.name.endswith(".xlsx")
-    ]
-    action_logs = pd.concat(frames, ignore_index=True).convert_dtypes()
-
-    elapsed: float = timeit.default_timer() - st_time
-    n_read: int = len(action_logs.index)
-    noun: str = "row" if n_read == 1 else "rows"
-    print(f"Read {n_read} {noun} in {elapsed:.3f}s")
 
     renamer = {
         "WLS ID": "Program ID",
         "Date of Action": "Action Date",
     }
-
     out_cols = [
         "Program ID",
         "Recorded By",
@@ -48,14 +57,41 @@ def process_action_logs(
         "Action Log Type",
         "Notes",
     ]
+    renaming_cacher = ParquetCacher(
+        pre_process=lambda df: df.rename(columns=renamer)[out_cols],
+    )
 
-    action_logs = action_logs.rename(columns=renamer)[out_cols]
-    action_logs.to_csv(process_dir / "output.csv", index=False)
+    if process_mode == "batch":
+        collector = PartialCollector(
+            process_root,
+            "action_logs",
+            cache_dir="action_logs",
+            cache_location="system",
+            collection_cacher=renaming_cacher,
+        )
+        action_logs = collector.collect()
+    elif process_mode == "single":
+        action_logs = CachedExcelReader(
+            process_root.parent,
+            cache_location="system",
+        ).read_excel(process_root.name, cacher=renaming_cacher)
+    else:
+        msg = f"Invalid process mode: {process_mode}"
+        raise ValueError(msg)
+
+    elapsed: float = timeit.default_timer() - st_time
+    n_read: int = len(action_logs.index)
+    noun: str = "row" if n_read == 1 else "rows"
+    module_logger.info("Read %s %s in %.3fs", n_read, noun, elapsed)
+    action_logs.to_csv(Path(user_downloads_dir()) / "action_logs.csv", index=True)
 
 
 if __name__ == "__main__":
     from prompt_utils import FilePrompt
     from rich.prompt import Confirm
+
+    module_logger.setLevel(logging.DEBUG)
+    module_logger.addHandler(logging.StreamHandler())
 
     al_root: Path | None = None
     process_mode: ProcessMode | None = None

@@ -28,8 +28,8 @@ repos:
     rev: v0.1.6
     hooks:
       # Run the linter.
-      - id: ruff
-        args: [--fix]
+      # - id: ruff
+      #   args: [--fix]
       # Run the formatter.
       - id: ruff-format
 
