@@ -18,6 +18,7 @@ pandas = "^2.0.1"
 pywin32 = { version = "^306", markers = "sys_platform == \"win32\"" }
 rich = "^13.3.5"
 tomlkit = "^0.11.8"
+platformdirs = "^4.0.0"
 
 [tool.poetry.group]
 [tool.poetry.group.dev.dependencies]
@@ -122,11 +123,11 @@ ignore = [
 ]
 unfixable = ["B"]
 
+[tool.ruff.format]
+quote-style = "double"
+
 [tool.ruff.pydocstyle]
 convention = "numpy"
-
-[tool.ruff.flake8-quotes]
-docstring-quotes = "double"
 
 
 [build-system]
