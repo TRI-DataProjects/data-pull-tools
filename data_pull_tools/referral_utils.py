@@ -1,21 +1,28 @@
 from __future__ import annotations
 
 import json
-import sys
+import logging
 import timeit
 from collections.abc import Mapping
-from concurrent.futures import ProcessPoolExecutor
-from os import PathLike, scandir
+from functools import partial
+from os import PathLike
 from pathlib import Path
-from typing import Union
+from typing import TypeVar, Union
 
-import numpy as np
+from collections.abc import Callable
+
 import pandas as pd
 from pandas import DataFrame
 
-from data_pull_tools.cached_excel_reader import CachedExcelReader
+from data_pull_tools.cached_excel_reader import CachedExcelReader, ParquetCacher
+from data_pull_tools.map_utils import traverse_map
+from data_pull_tools.partial_collector import PartialCollector
+
+module_logger = logging.getLogger(__name__)
 
 StrPath = Union[str, PathLike[str]]
+T = TypeVar("T")
+
 _search_in_minute = "Referral Search Number In Minute"
 _row_key = ["ReferralID", "Date of Action", _search_in_minute]
 _max_searches_per_minute = 10
@@ -75,152 +82,211 @@ def clean_referral_action_logs(df: DataFrame) -> DataFrame:
     return df.drop("_merge", axis=1)
 
 
-def parse_referral_chunk(df: DataFrame) -> list[dict]:
-    list_notes = []
+def try_parse_filters(s):
+    try:
+        data = json.loads(s)
+    except json.JSONDecodeError:
+        return pd.NA
 
-    for _, row in df.iterrows():
-        try:
-            obj = json.loads(row["Notes"])
-        except json.JSONDecodeError:
-            break
+    if isinstance(data, Mapping) and "Filters" in data and len(data["Filters"]) > 0:
+        return data["Filters"]
 
-        if isinstance(obj, Mapping) and "Filters" in obj:
-            list_notes.extend(
-                row[_row_key]
-                .to_frame()
-                .T.merge(
-                    right=pd.json_normalize(obj["Filters"]),
-                    how="cross",
-                )
-                .to_dict(orient="records"),
-            )
-
-    return list_notes
+    return pd.NA
 
 
-def multiprocess_referral_notes(df: DataFrame) -> DataFrame:
-    chunk_size = 100
+def process_referral_notes(df: DataFrame) -> DataFrame:
+    df = df.loc[df["Notes"].notna()]
+    df["Notes"] = df["Notes"].apply(try_parse_filters)
+    df = df.loc[df["Notes"].notna()]
 
-    with ProcessPoolExecutor() as executor:
-        splits = list(range(chunk_size, len(df.index), chunk_size))
-        chunks = np.split(df, splits)
-        results = executor.map(parse_referral_chunk, chunks)
+    df = df.explode("Notes").reset_index(drop=True)
+    filters = pd.json_normalize(df["Notes"].to_list())
+    return pd.concat(
+        [
+            df.drop(["Notes"], axis=1),
+            filters,
+        ],
+        axis=1,
+    )
 
-    frame = []
-    for result in results:
-        frame.extend(result)
 
-    return pd.DataFrame(frame)
-
-
-def process_referrals(
-    referrals_root: StrPath,
-    process_mode: str | bool = True,
-) -> None:
-    referrals_root = Path(referrals_root)
-    excel_reader = CachedExcelReader(referrals_root)
-    print("Reading action logs file")
+def measure_function(
+    func: Callable[[], T],
+    measure: Callable[[T], float | int],
+    verb: str,
+    noun: tuple[str, str],
+) -> T:
     st_time: float = timeit.default_timer()
 
-    if isinstance(process_mode, bool):
-        if not process_mode:
-            msg = f"process_mode of '{process_mode}' not supported."
-            raise ValueError(msg)
-        frames = [
-            excel_reader.read_excel(entry.name)
-            for entry in scandir(referrals_root)
-            if entry.is_file and entry.name.endswith(".xlsx")
-        ]
-        df = pd.concat(frames, ignore_index=True).convert_dtypes()
-    elif isinstance(process_mode, str):
-        df: DataFrame = excel_reader.read_excel(process_mode).convert_dtypes()
-    else:
-        msg = f"process_mode of '{process_mode}' not supported."
-        raise TypeError(msg)
+    result = func()
 
     elapsed: float = timeit.default_timer() - st_time
+    count = measure(result)
+    chosen_noun = noun[0] if count == 1 else noun[1]
+    module_logger.info("%s %d %s in %.3fs", verb, count, chosen_noun, elapsed)
 
-    n_read: int = len(df.index)
-    noun: str = "row" if n_read == 1 else "rows"
-    print(f"Read {n_read} {noun} in {elapsed:.3f}s")
+    return result
 
-    print("Processing action logs")
-    st_time: float = timeit.default_timer()
+
+def _read_action_logs(
+    process_root: Path,
+) -> DataFrame:
     action_logs_keep = [
         "Parent Searched for Programs",
         "Specialist Performed Search",
     ]
-    df = df.loc[df["Action Log Name"].isin(action_logs_keep)]
-    df = process_referral_action_logs(df)
-    elapsed: float = timeit.default_timer() - st_time
-    print(f"Processed {len(df.index)} referrals in {elapsed:.3f}s")
+    filtering_cacher = ParquetCacher(
+        pre_process=lambda df: df.loc[df["Action Log Name"].isin(action_logs_keep)],
+    )
 
-    print("Cleaning action logs file")
-    st_time: float = timeit.default_timer()
-    df = clean_referral_action_logs(df)
-    elapsed: float = timeit.default_timer() - st_time
+    if process_root.is_dir():
+        return PartialCollector(
+            process_root,
+            "referrals",
+            cache_dir="referrals",
+            cache_location="system",
+            collection_cacher=filtering_cacher,
+        ).collect()
 
-    n_dropped = n_read - len(df.index)
-    noun: str = "row" if n_dropped == 1 else "rows"
-    print(f"Removed {n_dropped} unclean {noun} in {elapsed:.3f}")
+    if process_root.is_file():
+        return CachedExcelReader(
+            process_root.parent,
+            cache_location="system",
+        ).read_excel(
+            process_root.name,
+            cacher=filtering_cacher,
+        )
 
-    print("Saving referrals")
-    df.drop("Notes", axis=1).to_csv(
-        referrals_root / r"ProcessedReferrals.csv",
+    msg = "process_root of '%s' not supported."
+    raise ValueError(msg, process_root)
+
+
+def process_referrals(
+    process_root: Path,
+) -> None:
+    module_logger.info("Reading action logs from '%s'", process_root)
+    part = partial(_read_action_logs, process_root)
+    action_logs = measure_function(
+        part,
+        lambda df: len(df.index),
+        "Read",
+        ("row", "rows"),
+    )
+
+    if process_root.is_file():
+        process_root = process_root.parent
+
+    module_logger.info("Processing action logs")
+    part = partial(process_referral_action_logs, action_logs)
+    action_logs = measure_function(
+        part,
+        lambda df: len(df.index),
+        "Processed",
+        ("referral", "referrals"),
+    )
+
+    rows_before_clean = len(action_logs.index)
+    module_logger.info("Cleaning action logs file")
+    part = partial(clean_referral_action_logs, action_logs)
+    action_logs = measure_function(
+        part,
+        lambda df: rows_before_clean - len(df.index),
+        "Removed",
+        ("unclean row", "unclean rows"),
+    )
+
+    module_logger.debug("Saving referrals")
+    action_logs.drop("Notes", axis=1).to_csv(
+        process_root / "ProcessedReferrals.csv",
         index=False,
     )
-    print("Save successful")
+    module_logger.debug("Save successful")
 
-    print("Parsing filters")
-    st_time: float = timeit.default_timer()
-    notes: DataFrame = multiprocess_referral_notes(df)
-    elapsed: float = timeit.default_timer() - st_time
+    module_logger.info("Parsing filters")
+    part = partial(process_referral_notes, action_logs)
+    notes = measure_function(
+        part,
+        lambda df: len(df.index),
+        "Parsed",
+        ("filter", "filters"),
+    )
 
-    from_rows: int = len(df.index)
-    to_rows: int = len(notes.index)
-    print(f"Parsed {from_rows} referrals with {to_rows} filters in {elapsed:.3f}s")
+    module_logger.debug("Saving filters")
+    notes.to_csv(
+        process_root / "ProcessedReferralFiltersOnly.csv",
+        index=False,
+    )
+    module_logger.debug("Save successful")
 
-    print("Saving filters")
-    notes.to_csv(referrals_root / r"ProcessedReferralFiltersOnly.csv", index=False)
-    print("Save successful")
+
+def _parse_toml_config(toml_path: Path) -> Path | None:
+    """Parse a TOML configuration file for referral processing."""
+    if not toml_path.exists():
+        module_logger.debug("No config file found at '%s'", toml_path)
+        return None
+
+    from toml_utils import load_toml
+
+    module_logger.debug("Loading config file at '%s'", toml_path)
+    config = load_toml(toml_path)
+
+    root = traverse_map(config, ["referral", "root"])
+    if root is None:
+        module_logger.debug("No referral root found in config")
+        return None
+    if not isinstance(root, str):
+        module_logger.debug(
+            "Ignoring invalid referral root from config: '%s'",
+            root,
+        )
+        return None
+    root = Path(root)
+    module_logger.debug("referral root: '%s'", root)
+    return root
+
+
+def _update_toml_config(toml_path: Path, ref_root: Path) -> None:
+    """Update a TOML configuration file for referral processing."""
+    from toml_utils import manage_toml_file, update_toml_values
+
+    with manage_toml_file(toml_path) as toml_file:
+        update_toml_values(
+            toml_file,
+            {
+                "referral": {
+                    "root": ref_root.as_posix(),
+                },
+            },
+        )
 
 
 if __name__ == "__main__":
     from prompt_utils import DirPrompt, FilePrompt
-    from rich.pretty import pprint
     from rich.prompt import Confirm
 
-    ref_root: Path | None = None
-    process_mode: str | bool | None = None
+    module_logger.setLevel(logging.DEBUG)
+    module_logger.addHandler(logging.StreamHandler())
 
     # Try to load a sibling config file
-    config_path = Path(__file__).parent / "referral_config.toml"
-    if config_path.exists():
-        from toml_utils import load_toml
-
-        config = load_toml(config_path)
-        if "referral_root" in config:
-            ref_root = Path(config["referral_root"])
-        if "process_mode" in config:
-            process_mode = config["process_mode"]
+    config_path = Path(__file__).parent / "_run_config.toml"
+    ref_root = _parse_toml_config(config_path)
 
     # Prompt user for any settings not loaded
     if ref_root is None:
         ref_root = DirPrompt.ask("Enter referral directory path")
 
-    if process_mode is None:
+    if (
+        ref_root is None or not ref_root.exists()
+        # or not Confirm.ask("Would you like to use the config file?", default=True)
+    ):
+        module_logger.debug("No referral root found, prompting user")
         if Confirm.ask("Are you processing a single file?"):
-            process_mode = FilePrompt.ask("Please enter the file name", ref_root).name
-        elif Confirm.ask(f"Process all Excel files in '{ref_root}'"):
-            process_mode = True
+            ref_root = FilePrompt.ask("Please enter the file path")
         else:
-            print("Cannot proceed with given configuration of:")
-            print("config_path: ", end="")
-            pprint(config_path)
-            print("process_mode: ", end="")
-            pprint(process_mode)
-            print("Exiting")
-            sys.exit(1)
+            ref_root = DirPrompt.ask("Please enter the directory path")
+
+        if Confirm.ask("Would you like to remember this path?"):
+            _update_toml_config(config_path, ref_root)
 
     # Process those referrals!
-    process_referrals(ref_root, process_mode)
+    process_referrals(ref_root)

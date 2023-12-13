@@ -272,6 +272,8 @@ class PathPrompt(PromptBase[Path]):
 
 
 class FilePrompt(PathPrompt):
+    """A prompt for a file path."""
+
     validate_error_message = "[prompt.invalid]Please enter a valid file path"
 
     def process_response(self, value: str) -> Path:
@@ -284,6 +286,8 @@ class FilePrompt(PathPrompt):
 
 
 class DirPrompt(PathPrompt):
+    """A prompt for a directory path."""
+
     validate_error_message = "[prompt.invalid]Please enter a valid directory path"
 
     def process_response(self, value: str) -> Path:

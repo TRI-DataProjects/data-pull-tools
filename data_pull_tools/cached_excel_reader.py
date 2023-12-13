@@ -5,8 +5,9 @@ import errno
 import logging
 import os
 from abc import ABC, abstractmethod
+from enum import Enum, member
 from pathlib import Path
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING, Literal, Protocol
 
 import pandas as pd
 from platformdirs import user_cache_dir
@@ -49,13 +50,17 @@ class Cacher(ABC):
         ...
 
     @property
-    def pre_process(self) -> Callable[[DataFrame], DataFrame] | None:
+    def pre_process(self) -> Callable[[DataFrame], DataFrame]:
         """Get the pre-process function."""
+        if self._pre_process is None:
+            return lambda df: df
         return self._pre_process
 
     @property
-    def post_process(self) -> Callable[[DataFrame], DataFrame] | None:
+    def post_process(self) -> Callable[[DataFrame], DataFrame]:
         """Get the post-process function."""
+        if self._post_process is None:
+            return lambda df: df
         return self._post_process
 
     @abstractmethod
@@ -111,7 +116,7 @@ class ParquetCacher(Cacher):
         self._user_pre_process = pre_process
         super().__init__(self._pq_pre_process, post_process)
 
-    def _pq_pre_process(self, df: DataFrame) -> DataFrame:
+    def _pq_pre_process(self, input_data: DataFrame) -> DataFrame:
         """
         Preprocess dataframe before caching to Parquet format.
 
@@ -128,15 +133,15 @@ class ParquetCacher(Cacher):
             Preprocessed dataframe.
         """
         # Convert object dtypes to str
-        df = df.convert_dtypes()
-        obj_cols = df.select_dtypes(include="object").columns
-        df[obj_cols] = df[obj_cols].astype(str)
-        df[obj_cols] = df[obj_cols].replace("nan", pd.NA)
+        input_data = input_data.convert_dtypes()
+        obj_cols = input_data.select_dtypes(include="object").columns
+        input_data[obj_cols] = input_data[obj_cols].astype(str)
+        input_data[obj_cols] = input_data[obj_cols].replace("nan", pd.NA)
 
         if self._user_pre_process is not None:
-            df = self._user_pre_process(df)
+            input_data = self._user_pre_process(input_data)
 
-        return df
+        return input_data
 
     @property
     def suffix(self) -> str:  # noqa: D102
@@ -181,6 +186,272 @@ DEFAULT_CACHE_DIR = Path(
 )
 
 
+def _cache_miss(input_file: Path, cache_file: Path) -> bool:
+    """Checks if the input file is already cached.
+
+    Parameters
+    ----------
+    input_file : Path
+        The input file path.
+    cache_file : Path
+        The cache file path.
+
+    Returns
+    -------
+    bool
+        True if the input_file does not have a valid cache, False otherwise.
+    """
+    return not _cache_hit(input_file, cache_file)
+
+
+def _cache_hit(input_file: Path, cache_file: Path) -> bool:
+    """Checks if the input file is already cached.
+
+    Parameters
+    ----------
+    input_file : Path
+        The input file path.
+    cache_file : Path
+        The cache file path.
+
+    Returns
+    -------
+    bool
+        True if the input_file has a valid cache, False otherwise.
+    """
+    return cache_file.exists() and (
+        input_file.stat().st_mtime < cache_file.stat().st_mtime
+    )
+
+
+class CacheBehaviorProto(Protocol):
+    """Cache function protocol."""
+
+    def __call__(
+        self,
+        input_file: Path,
+        sheet_name: int | str,
+        cacher: Cacher,
+        cache_file: Path,
+    ) -> DataFrame:
+        """Perform some action, such as reading the input file and saving it to the
+        specified cache location, eventually returning a DataFrame.
+
+        Parameters
+        ----------
+        input_file : Path
+            The input file path.
+        sheet_name : int | str
+            Strings are used for sheet names. Integers are used in zero-indexed
+            sheet positions (chart sheets do not count as a sheet position).
+        cacher : Cacher, default DEFAULT_CACHER
+            The cacher object for cache operations.
+        cache_file : Path
+            The cache file path.
+
+        Returns
+        -------
+        DataFrame
+            The final DataFrame.
+        """
+        ...
+
+
+def _check_cache(
+    input_file: Path,
+    sheet_name: int | str,
+    cacher: Cacher,
+    cache_file: Path,
+) -> DataFrame:
+    """Checks cache and returns DataFrame, reading input only when necessary.
+
+    Checks if the cache is valid. If cache is valid, returns cached data.
+    If not, reads fresh data, caches it, and returns it.
+
+    Parameters
+    ----------
+    input_file : Path
+        The input file path.
+    sheet_name : str | int
+        The sheet name or index.
+    cacher : Cacher
+        The cacher object.
+    cache_file : Path
+        The cache file path.
+
+    Returns
+    -------
+    DataFrame
+        The cached or freshly read DataFrame.
+    """
+    if _cache_hit(input_file, cache_file):
+        return cacher.post_process(cacher.read_cache(cache_file))
+
+    data = pd.read_excel(input_file, sheet_name=sheet_name)
+    data = cacher.pre_process(data)
+    cacher.write_cache(cache_file, data)
+
+    return cacher.post_process(data)
+
+
+def _fallback_to_cache(
+    input_file: Path,
+    sheet_name: int | str,
+    cacher: Cacher,
+    cache_file: Path,
+) -> DataFrame:
+    """Checks cache and returns DataFrame, reading input only when necessary.
+    If input reading fails, attempts to re-use cache if available.
+
+    Checks if the cache is valid. If cache is valid, returns cached data.
+    If not, reads fresh data, caches it, and returns it.
+    If reading fresh data fails, attempts to re-use cache instead of raising.
+    Re-raises the initial reading error if the cache is unavailable.
+
+    Parameters
+    ----------
+    input_file : Path
+        The input file path.
+    sheet_name : str | int
+        The sheet name or index.
+    cacher : Cacher
+        The cacher object.
+    cache_file : Path
+        The cache file path.
+
+    Returns
+    -------
+    DataFrame
+        The cached or freshly read DataFrame.
+    """
+    if _cache_hit(input_file, cache_file):
+        return cacher.post_process(cacher.read_cache(cache_file))
+
+    try:
+        data = pd.read_excel(input_file, sheet_name=sheet_name)
+    except Exception as e:
+        module_logger.exception("Failed to read Excel file: '%s'", input_file)
+        if not cache_file.exists():
+            # Not even the cache can save us
+            raise e from None
+        # Fall back to the cache
+        return cacher.post_process(cacher.read_cache(cache_file))
+
+    # There was a cache miss and we successfully loaded input data
+    data = cacher.pre_process(data)
+    cacher.write_cache(cache_file, data)
+    return cacher.post_process(data)
+
+
+def _force_cache_update(
+    input_file: Path,
+    sheet_name: int | str,
+    cacher: Cacher,
+    cache_file: Path,
+) -> DataFrame:
+    """Forces an update of the cache from the input data.
+
+    Reads the input data, caches it, and returns the DataFrame.
+
+    Parameters
+    ----------
+    input_file : Path
+        The input file path.
+    sheet_name : str | int
+        The sheet name or index.
+    cacher : Cacher
+        The cacher object.
+    cache_file : Path
+        The cache file path.
+
+    Returns
+    -------
+    pd.DataFrame
+        The freshly cached DataFrame.
+    """
+    data = pd.read_excel(input_file, sheet_name=sheet_name)
+    data = cacher.pre_process(data)
+    cacher.write_cache(cache_file, data)
+    return cacher.post_process(data)
+
+
+def _skip_cache(
+    input_file: Path,
+    sheet_name: int | str,
+    cacher: Cacher,
+    cache_file: Path,  # noqa: ARG001
+) -> DataFrame:
+    """Reads the input file directly, skips all interaction with the cache.
+
+    Parameters
+    ----------
+    input_file : Path
+        The input file path.
+    sheet_name : str | int
+        The sheet name or index.
+    cacher : Cacher
+        The cacher object.
+    cache_file : Path
+        The cache file path.
+
+    Returns
+    -------
+    pd.DataFrame
+        The freshly read DataFrame.
+    """
+    data = pd.read_excel(input_file, sheet_name=sheet_name)
+    data = cacher.pre_process(data)
+    return cacher.post_process(data)
+
+
+def _from_cache(
+    input_file: Path,  # noqa: ARG001
+    sheet_name: int | str,  # noqa: ARG001
+    cacher: Cacher,
+    cache_file: Path,
+) -> DataFrame:
+    """Reads the cached DataFrame directly, ignoring input data.
+
+    Parameters
+    ----------
+    input_file : Path
+        The input Excel file path (unused).
+    sheet_name : str | int
+        The sheet name or index (unused).
+    cacher : Cacher
+        The cacher object.
+    cache_file : Path
+        The cache file path.
+
+    Returns
+    -------
+    pd.DataFrame
+        The cached DataFrame.
+    """
+    data = cacher.read_cache(cache_file)
+    return cacher.post_process(data)
+
+
+class CacheBehavior(Enum):
+    """Enumeration of several default cache behaviors."""
+
+    def __call__(
+        self,
+        input_file: Path,
+        sheet_name: int | str,
+        cacher: Cacher,
+        cache_file: Path,
+    ) -> DataFrame:
+        """Call the associated cache function."""
+        return self.value(input_file, sheet_name, cacher, cache_file)  # type: ignore reportGeneralTypeIssues
+
+    CHECK_CACHE = member(_check_cache)
+    FALLBACK_TO_CACHE = member(_fallback_to_cache)
+    FORCE_CACHE_UPDATE = member(_force_cache_update)
+    SKIP_CACHE = member(_skip_cache)
+    FROM_CACHE = member(_from_cache)
+
+
 class CachedExcelReader:
     """Reads and caches Excel sheet data in alternative formats
     to improve access times.
@@ -217,7 +488,9 @@ class CachedExcelReader:
             self.cache_location,
         )
 
+    #
     # Properties and property validating methods
+    #
 
     @staticmethod
     def _validate_root_dir(root_dir: Path | str | None) -> Path:
@@ -397,33 +670,13 @@ class CachedExcelReader:
         cache_file = cache_dir / f"{input_file.stem}-{sheet_name}{cacher_suffix}"
         return input_file, cache_file
 
-    @staticmethod
-    def _should_update_cache(input_file: Path, cache_file: Path) -> bool:
-        """Checks if the cache needs to be updated.
-
-        Parameters
-        ----------
-        input_file : Path
-            The input file path.
-        cache_file : Path
-            The cache file path.
-
-        Returns
-        -------
-        bool
-            True if the cache needs to be updated, False otherwise.
-        """
-        return not cache_file.exists() or (
-            input_file.stat().st_mtime > cache_file.stat().st_mtime
-        )
-
     def read_excel(
         self,
         input_file: str | Path,
         sheet_name: int | str = 0,
         *,
         cacher: Cacher = DEFAULT_CACHER,
-        force_cache_update: bool = False,
+        behavior: CacheBehaviorProto = CacheBehavior.CHECK_CACHE,
     ) -> DataFrame:
         """Read an Excel file and cache the result.
 
@@ -436,14 +689,24 @@ class CachedExcelReader:
             sheet positions (chart sheets do not count as a sheet position).
         cacher : Cacher, default DEFAULT_CACHER
             The cacher object for cache operations.
-        force_cache_update : bool, default False
-            If True, forces an update of the cache.
+        behavior : CacheBehaviorProto, default CacheBehavior.CHECK_CACHE
+            A callable that determines how the input and cache are handled.
+            See `CacheBehavior` for more information and an enumeration of behaviors
+            default behaviors.
 
         Returns
         -------
         DataFrame
             The data read from the Excel file, after any preprocessing
             or postprocessing performed by the `cacher`.
+
+        Examples
+        --------
+        >>> reader = CachedExcelReader()
+        >>> reader.read_excel("input.xlsx", 0)
+        >>> reader.read_excel("input.xlsx", "Sheet1")
+
+        These create two different cache files, even if they point to the same sheet.
         """
         input_file, cache_file = self._map_paths(
             root_dir=self.root_dir,
@@ -453,18 +716,7 @@ class CachedExcelReader:
             cacher_suffix=cacher.suffix,
         )
 
-        if force_cache_update or self._should_update_cache(input_file, cache_file):
-            data = pd.read_excel(input_file, sheet_name=sheet_name)
-            if cacher.pre_process is not None:
-                data = cacher.pre_process(data)
-            cacher.write_cache(cache_file, data)
-        else:
-            data = cacher.read_cache(cache_file)
-
-        if cacher.post_process is not None:
-            data = cacher.post_process(data)
-
-        return data
+        return behavior(input_file, sheet_name, cacher, cache_file)
 
 
 if __name__ == "__main__":

@@ -9,7 +9,7 @@ packages = [{ include = "data_pull_tools" }]
 exclude = ["_scripts"]
 
 [tool.poetry.dependencies]
-python = "^3.10"
+python = "^3.11"
 fastparquet = "^2023.4.0"
 ftfy = "^6.1.1"
 ipython = "^8.13.2"
