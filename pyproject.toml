@@ -1,7 +1,7 @@
 [tool]
 [tool.poetry]
 name = "data_pull_tools"
-version = "0.1.4"
+version = "0.2.0"
 description = ""
 authors = ["John Merkel <dev.genericallyterrible@gmail.com>"]
 readme = "README.md"
