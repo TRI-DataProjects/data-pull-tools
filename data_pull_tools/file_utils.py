@@ -42,7 +42,7 @@ def hide_file(path: Path) -> Path:
         str(path.absolute()),
         FILE_ATTRIBUTE_HIDDEN,
     ):
-        raise WinError()  # noqa: RSE102
+        raise WinError()
 
     return path
 
