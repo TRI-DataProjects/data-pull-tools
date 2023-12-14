@@ -7,19 +7,21 @@ from typing import TYPE_CHECKING
 
 import pandas as pd
 
-from data_pull_tools.cached_excel_reader import DEFAULT_CACHER, CachedExcelReader
+from .cacher import DEFAULT_CACHER
+from .excel_reader import CachedExcelReader
 
 if TYPE_CHECKING:
     from pathlib import Path
 
     from pandas import DataFrame
 
-    from data_pull_tools.cached_excel_reader import CacheLocation, Cacher
+    from .cacher import Cacher
+    from .excel_reader import CacheLocation
 
 module_logger = logging.getLogger(__name__)
 
 
-class PartialCollector:
+class ExcelCollector:
     def __init__(
         self,
         input_dir: Path,
