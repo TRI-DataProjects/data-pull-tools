@@ -9,7 +9,7 @@ packages = [{ include = "data_pull_tools" }]
 exclude = ["_scripts"]
 
 [tool.poetry.dependencies]
-python = "^3.11"
+python = ">=3.11, <3.12"
 fastparquet = "^2023.4.0"
 ftfy = "^6.1.1"
 ipython = "^8.13.2"
@@ -22,10 +22,6 @@ platformdirs = "^4.0.0"
 
 [tool.poetry.group]
 [tool.poetry.group.dev.dependencies]
-black = "^23.11.0"
-flake8 = "^6.0.0"
-flake8-bugbear = "^23.5.9"
-isort = "^5.12.0"
 poethepoet = "^0.20.0"
 tox = "^4.5.1"
 pre-commit = "^3.3.1"

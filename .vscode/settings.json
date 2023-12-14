@@ -11,7 +11,9 @@
         ".coverage": true,
         ".hypothesis": true,
         ".pytest_cache": true,
-        "**/__pycache__/": true
+        "**/__pycache__/": true,
+        "**/~$*": true,
+        "poetry.lock": false
     },
     "python.testing.pytestArgs": [
         "tests"
