@@ -1,15 +1,14 @@
 from __future__ import annotations
 
-from typing import TypeVar
-
 from collections.abc import Iterable, Mapping
+from typing import TypeVar
 
 K = TypeVar("K")
 V = TypeVar("V")
 RecursiveMap = Mapping[K, V | "RecursiveMap[K, V]"]
 
 
-def traverse_map(
+def traverse_mapping(
     dict_in: RecursiveMap[K, V],
     key_chain: Iterable[K],
     default: V | None = None,
