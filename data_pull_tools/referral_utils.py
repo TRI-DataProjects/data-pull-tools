@@ -3,20 +3,16 @@ from __future__ import annotations
 import json
 import logging
 import timeit
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from functools import partial
 from os import PathLike
 from pathlib import Path
 from typing import TypeVar, Union
 
-from collections.abc import Callable
-
 import pandas as pd
 from pandas import DataFrame
 
-from data_pull_tools.cached_excel_reader import CachedExcelReader, ParquetCacher
-from data_pull_tools.map_utils import traverse_map
-from data_pull_tools.partial_collector import PartialCollector
+from data_pull_tools.caching import CachedExcelReader, ExcelCollector, ParquetCacher
 
 module_logger = logging.getLogger(__name__)
 
@@ -140,7 +136,7 @@ def _read_action_logs(
     )
 
     if process_root.is_dir():
-        return PartialCollector(
+        return ExcelCollector(
             process_root,
             "referrals",
             cache_dir="referrals",
@@ -219,57 +215,25 @@ def process_referrals(
     module_logger.debug("Save successful")
 
 
-def _parse_toml_config(toml_path: Path) -> Path | None:
-    """Parse a TOML configuration file for referral processing."""
-    if not toml_path.exists():
-        module_logger.debug("No config file found at '%s'", toml_path)
-        return None
-
-    from toml_utils import load_toml
-
-    module_logger.debug("Loading config file at '%s'", toml_path)
-    config = load_toml(toml_path)
-
-    root = traverse_map(config, ["referral", "root"])
-    if root is None:
-        module_logger.debug("No referral root found in config")
-        return None
-    if not isinstance(root, str):
-        module_logger.debug(
-            "Ignoring invalid referral root from config: '%s'",
-            root,
-        )
-        return None
-    root = Path(root)
-    module_logger.debug("referral root: '%s'", root)
-    return root
-
-
-def _update_toml_config(toml_path: Path, ref_root: Path) -> None:
-    """Update a TOML configuration file for referral processing."""
-    from toml_utils import manage_toml_file, update_toml_values
-
-    with manage_toml_file(toml_path) as toml_file:
-        update_toml_values(
-            toml_file,
-            {
-                "referral": {
-                    "root": ref_root.as_posix(),
-                },
-            },
-        )
-
-
 if __name__ == "__main__":
     from prompt_utils import DirPrompt, FilePrompt
     from rich.prompt import Confirm
+    from toml_utils import load_toml, update_toml_file_value
+
+    from data_pull_tools.mapping_utils import traverse_mapping
 
     module_logger.setLevel(logging.DEBUG)
     module_logger.addHandler(logging.StreamHandler())
 
-    # Try to load a sibling config file
+    ref_root: Path | None = None
+
     config_path = Path(__file__).parent / "_run_config.toml"
-    ref_root = _parse_toml_config(config_path)
+
+    if config_path.exists():
+        toml = load_toml(config_path)
+        root = traverse_mapping(toml, ["referral", "root"])
+        if isinstance(root, str):
+            ref_root = Path(root)
 
     # Prompt user for any settings not loaded
     if ref_root is None:
@@ -286,7 +250,11 @@ if __name__ == "__main__":
             ref_root = DirPrompt.ask("Please enter the directory path")
 
         if Confirm.ask("Would you like to remember this path?"):
-            _update_toml_config(config_path, ref_root)
+            update_toml_file_value(
+                config_path,
+                ["referral", "root"],
+                ref_root.as_posix(),
+            )
 
     # Process those referrals!
     process_referrals(ref_root)

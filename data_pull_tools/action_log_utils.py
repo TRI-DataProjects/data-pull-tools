@@ -8,9 +8,7 @@ from pathlib import Path
 
 from platformdirs import user_downloads_dir
 
-from data_pull_tools.cached_excel_reader import CachedExcelReader, ParquetCacher
-from data_pull_tools.map_utils import traverse_map
-from data_pull_tools.partial_collector import PartialCollector
+from data_pull_tools.caching import CachedExcelReader, ExcelCollector, ParquetCacher
 from data_pull_tools.prompt_utils import DirPrompt
 
 module_logger = logging.getLogger(__name__)
@@ -61,7 +59,7 @@ def process_action_logs(
     )
 
     if process_root.is_dir():
-        collector = PartialCollector(
+        collector = ExcelCollector(
             process_root,
             "action_logs",
             cache_dir="action_logs",
@@ -93,50 +91,12 @@ def process_action_logs(
     module_logger.info("Output written in %.3fs", elapsed)
 
 
-def _parse_toml_config(toml_path: Path) -> Path | None:
-    """Parse a TOML configuration file for action log processing."""
-    if not toml_path.exists():
-        module_logger.debug("No config file found at '%s'", toml_path)
-        return None
-
-    from toml_utils import load_toml
-
-    module_logger.debug("Loading config file at '%s'", toml_path)
-    config = load_toml(toml_path)
-
-    root = traverse_map(config, ["action_log", "root"])
-    if root is None:
-        module_logger.debug("No action log root found in config")
-        return None
-    if not isinstance(root, str):
-        module_logger.debug(
-            "Ignoring invalid action log root from config: '%s'",
-            root,
-        )
-        return None
-    root = Path(root)
-    module_logger.debug("Action log root: '%s'", root)
-    return root
-
-
-def _update_toml_config(toml_path: Path, al_root: Path) -> None:
-    """Update a TOML configuration file for action log processing."""
-    from toml_utils import manage_toml_file, update_toml_values
-
-    with manage_toml_file(toml_path) as toml_file:
-        update_toml_values(
-            toml_file,
-            {
-                "action_log": {
-                    "root": al_root.as_posix(),
-                },
-            },
-        )
-
-
 if __name__ == "__main__":
     from prompt_utils import FilePrompt
     from rich.prompt import Confirm
+    from toml_utils import load_toml, update_toml_file_value
+
+    from data_pull_tools.mapping_utils import traverse_mapping
 
     module_logger.setLevel(logging.DEBUG)
     module_logger.addHandler(logging.StreamHandler())
@@ -144,7 +104,12 @@ if __name__ == "__main__":
     al_root: Path | None = None
 
     config_path = Path(__file__).parent / "_run_config.toml"
-    al_root = _parse_toml_config(config_path)
+
+    if config_path.exists():
+        toml = load_toml(config_path)
+        root = traverse_mapping(toml, ["action_log", "root"])
+        if isinstance(root, str):
+            al_root = Path(root)
 
     if (
         al_root is None or not al_root.exists()
@@ -157,6 +122,10 @@ if __name__ == "__main__":
             al_root = DirPrompt.ask("Please enter the directory path")
 
         if Confirm.ask("Would you like to remember this path?"):
-            _update_toml_config(config_path, al_root)
+            update_toml_file_value(
+                config_path,
+                ["action_log", "root"],
+                al_root.as_posix(),
+            )
 
     process_action_logs(al_root)
