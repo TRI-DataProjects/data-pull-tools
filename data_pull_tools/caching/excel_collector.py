@@ -71,11 +71,13 @@ class ExcelCollector:
 
     def _perform_collect(
         self,
+        reader: CachedExcelReader | None,
         behavior: CacheBehaviorProtocol,
     ) -> None:
         module_logger.info("Reading input file(s)")
+        read_func = reader or self.reader
         with mp.Pool() as pool:
-            reader = partial(
+            read_func = partial(
                 self.reader.read_excel,
                 sheet_name=self.sheet_name,
                 cacher=self.collection_cacher,
@@ -87,14 +89,18 @@ class ExcelCollector:
                 if entry.is_file() and entry != self.output_file
             ]
             raw_frames: list[DataFrame | dict[int | str, DataFrame]] = []
-            raw_frames = pool.map(reader, entries)
+            raw_frames = pool.map(read_func, entries)
 
         frames = []
         for frame in raw_frames:
             if isinstance(frame, dict):
-                frames.extend(frame.values())
-            else:
+                frames.extend([df for df in frame.values() if len(df.index) > 0])
+            elif len(frame.index) > 0:
                 frames.append(frame)
+
+        if len(frames) == 0:
+            module_logger.info("No data collected.")
+            return
 
         module_logger.info("Saving result")
 
@@ -104,9 +110,10 @@ class ExcelCollector:
 
     def collect(
         self,
+        collection_reader: CachedExcelReader | None = None,
         behavior: CacheBehaviorProtocol = CacheBehavior.CHECK_CACHE,
     ) -> DataFrame:
         module_logger.info("Collecting Excel files.")
-        if True or self._should_collect:
-            self._perform_collect(behavior)
+        if self._should_collect:
+            self._perform_collect(collection_reader, behavior)
         return self.reader.read_excel(self.output_file, behavior=behavior)
