@@ -5,13 +5,41 @@ from __future__ import annotations
 import logging
 import timeit
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from platformdirs import user_downloads_dir
 
-from data_pull_tools.caching import CachedExcelReader, ExcelCollector, ParquetCacher
+from data_pull_tools.caching import (
+    CachedExcelReader,
+    ExcelCollector,
+    ParquetCacher,
+)
 from data_pull_tools.prompt_utils import DirPrompt
 
+if TYPE_CHECKING:
+    from pandas import DataFrame
+
 module_logger = logging.getLogger(__name__)
+
+
+renamer = {
+    "WLS ID": "Program ID",
+    "Date of Action": "Action Date",
+}
+
+out_cols = [
+    "Program ID",
+    "Recorded By",
+    "Recorded Date",
+    "Action Date",
+    "Action Log Name",
+    "Action Log Type",
+    "Notes",
+]
+
+
+def _rename_columns(df: DataFrame) -> DataFrame:
+    return df.rename(columns=renamer)[out_cols]
 
 
 def process_action_logs(
@@ -41,21 +69,8 @@ def process_action_logs(
     module_logger.info("Reading action logs from '%s'", process_root)
     st_time: float = timeit.default_timer()
 
-    renamer = {
-        "WLS ID": "Program ID",
-        "Date of Action": "Action Date",
-    }
-    out_cols = [
-        "Program ID",
-        "Recorded By",
-        "Recorded Date",
-        "Action Date",
-        "Action Log Name",
-        "Action Log Type",
-        "Notes",
-    ]
     renaming_cacher = ParquetCacher(
-        pre_process=lambda df: df.rename(columns=renamer)[out_cols],
+        pre_process=_rename_columns,
     )
 
     if process_root.is_dir():
@@ -100,6 +115,10 @@ if __name__ == "__main__":
 
     module_logger.setLevel(logging.DEBUG)
     module_logger.addHandler(logging.StreamHandler())
+
+    cache_logger = logging.getLogger("data_pull_tools.caching.excel_collector")
+    cache_logger.setLevel(logging.DEBUG)
+    cache_logger.addHandler(logging.StreamHandler())
 
     al_root: Path | None = None
 

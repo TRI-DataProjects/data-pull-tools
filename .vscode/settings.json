@@ -13,7 +13,8 @@
         ".pytest_cache": true,
         "**/__pycache__/": true,
         "**/~$*": true,
-        "poetry.lock": false
+        "poetry.lock": false,
+        ".ruff_cache": true
     },
     "python.testing.pytestArgs": [
         "tests"

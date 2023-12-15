@@ -270,17 +270,28 @@ class CachedExcelReader:
     def read_excel(
         self,
         input_file: str | Path | ExcelFile,
-        sheet_name: None,
+        sheet_name: list[int] | list[str] | None,
         *,
         cacher: Cacher = DEFAULT_CACHER,
         behavior: CacheBehaviorProtocol = CacheBehavior.CHECK_CACHE,
     ) -> dict[int | str, DataFrame]:
         ...
 
+    @overload
     def read_excel(
         self,
         input_file: str | Path | ExcelFile,
-        sheet_name: int | str | None = 0,
+        sheet_name: int | str | list[int] | list[str] | None = 0,
+        *,
+        cacher: Cacher = DEFAULT_CACHER,
+        behavior: CacheBehaviorProtocol = CacheBehavior.CHECK_CACHE,
+    ) -> DataFrame | dict[int | str, DataFrame]:
+        ...
+
+    def read_excel(
+        self,
+        input_file: str | Path | ExcelFile,
+        sheet_name: int | str | list[int] | list[str] | None = 0,
         *,
         cacher: Cacher = DEFAULT_CACHER,
         behavior: CacheBehaviorProtocol = CacheBehavior.CHECK_CACHE,
@@ -303,7 +314,7 @@ class CachedExcelReader:
 
         Returns
         -------
-        DataFrame
+        DataFrame | dict[int | str, DataFrame]
             The data read from the Excel file, after any preprocessing
             or postprocessing performed by the `cacher`.
 
@@ -314,8 +325,14 @@ class CachedExcelReader:
         >>> reader.read_excel("input.xlsx", "Sheet1")
 
         These create two different cache files, even if they point to the same sheet.
+
+        >>> reader = CachedExcelReader()
+        >>> reader.read_excel("input.xlsx", None)
+
+        This creates a cache file for each sheet in the Excel file and returns a
+        dictionary of dataframes keyed by sheet name.
         """
-        if sheet_name is None:
+        if sheet_name is None or not isinstance(sheet_name, (int, str)):
             with pd.ExcelFile(input_file) as excel_file:
                 return {
                     sheet_name: self.read_excel(

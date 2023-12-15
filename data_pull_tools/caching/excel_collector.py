@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING
 
 import pandas as pd
 
+from .cache_behavior import CacheBehavior, CacheBehaviorProtocol
 from .cacher import DEFAULT_CACHER
 from .excel_reader import CachedExcelReader
 
@@ -26,6 +27,7 @@ class ExcelCollector:
         self,
         input_dir: Path,
         output_file: Path | str,
+        sheet_name: int | str | list[int] | list[str] | None = 0,
         glob_pattern: str = "*.xlsx",
         *,
         collection_cacher: Cacher = DEFAULT_CACHER,
@@ -50,6 +52,7 @@ class ExcelCollector:
         if self.output_file.exists():
             self.out_st_mtime = self.output_file.stat().st_mtime
         self.glob_pattern = glob_pattern
+        self.sheet_name = sheet_name
 
     @property
     def _should_collect(self) -> bool:
@@ -66,15 +69,34 @@ class ExcelCollector:
 
         return False
 
-    def _perform_collect(self) -> None:
+    def _perform_collect(
+        self,
+        behavior: CacheBehaviorProtocol,
+    ) -> None:
+        module_logger.info("Reading input file(s)")
         with mp.Pool() as pool:
-            reader = partial(self.reader.read_excel, cacher=self.collection_cacher)
+            reader = partial(
+                self.reader.read_excel,
+                sheet_name=self.sheet_name,
+                cacher=self.collection_cacher,
+                behavior=behavior,
+            )
             entries = [
                 entry
                 for entry in self.input_dir.glob(self.glob_pattern)
                 if entry.is_file() and entry != self.output_file
             ]
-            frames = pool.map(reader, entries)
+            raw_frames: list[DataFrame | dict[int | str, DataFrame]] = []
+            raw_frames = pool.map(reader, entries)
+
+        frames = []
+        for frame in raw_frames:
+            if isinstance(frame, dict):
+                frames.extend(frame.values())
+            else:
+                frames.append(frame)
+
+        module_logger.info("Saving result")
 
         collected = pd.concat(frames, ignore_index=True).convert_dtypes()
         collected.to_excel(self.output_file, index=False)
@@ -82,7 +104,9 @@ class ExcelCollector:
 
     def collect(
         self,
+        behavior: CacheBehaviorProtocol = CacheBehavior.CHECK_CACHE,
     ) -> DataFrame:
-        if self._should_collect:
-            self._perform_collect()
-        return self.reader.read_excel(self.output_file)
+        module_logger.info("Collecting Excel files.")
+        if True or self._should_collect:
+            self._perform_collect(behavior)
+        return self.reader.read_excel(self.output_file, behavior=behavior)

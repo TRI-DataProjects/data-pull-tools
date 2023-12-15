@@ -204,15 +204,14 @@ def _skip_cache(
         The freshly read DataFrame.
     """
     data = reader()
-    data = cacher.pre_process(data)
-    return cacher.post_process(data)
+    return cacher.post_process(cacher.pre_process(data))
 
 
 def _from_cache(
     input_file: Path,  # noqa: ARG001
-    cache_file: Path,  # noqa: ARG001
+    cache_file: Path,
     cacher: Cacher,
-    reader: Callable[[], DataFrame],
+    reader: Callable[[], DataFrame],  # noqa: ARG001
 ) -> DataFrame:
     """Reads the cached DataFrame directly, ignoring input data.
 
@@ -232,7 +231,7 @@ def _from_cache(
     DataFrame
         The cached DataFrame.
     """
-    data = reader()
+    data = cacher.read_cache(cache_file)
     return cacher.post_process(data)
 
 
