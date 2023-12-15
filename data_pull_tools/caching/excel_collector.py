@@ -109,7 +109,7 @@ class ExcelCollector:
 
         module_logger.info("Saving result")
 
-        collected = pd.concat(frames, ignore_index=True).convert_dtypes()
+        collected = pd.concat(frames, ignore_index=True, copy=False).convert_dtypes()
         collected.to_excel(self.output_file, index=False)
         self.out_st_mtime = self.output_file.stat().st_mtime
 
