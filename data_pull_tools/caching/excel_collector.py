@@ -91,11 +91,16 @@ class ExcelCollector:
             raw_frames: list[DataFrame | dict[int | str, DataFrame]] = []
             raw_frames = pool.map(read_func, entries)
 
+        def _valid_frame(df: DataFrame) -> bool:
+            return (not df.empty) and (df.notna().any().any())
+
         frames = []
         for frame in raw_frames:
             if isinstance(frame, dict):
-                frames.extend([df for df in frame.values() if len(df.index) > 0])
-            elif len(frame.index) > 0:
+                frames.extend(
+                    [df for df in frame.values() if _valid_frame(df)],
+                )
+            elif _valid_frame(frame):
                 frames.append(frame)
 
         if len(frames) == 0:
