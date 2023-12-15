@@ -22,6 +22,12 @@ if TYPE_CHECKING:
 module_logger = logging.getLogger(__name__)
 
 
+def drop_na_rows_and_cols(
+    df: DataFrame,
+) -> DataFrame:
+    return df.convert_dtypes().dropna(how="all", axis=1).dropna(how="all", axis=0)
+
+
 class ExcelCollector:
     def __init__(
         self,
@@ -48,6 +54,7 @@ class ExcelCollector:
             cache_location=cache_location,
         )
         self.collection_cacher = collection_cacher
+        self.collection_cacher.register_post_process(drop_na_rows_and_cols)
         self.output_file = output_file
         if self.output_file.exists():
             self.out_st_mtime = self.output_file.stat().st_mtime

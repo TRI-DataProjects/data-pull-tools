@@ -1,15 +1,18 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from collections.abc import Callable
 from typing import TYPE_CHECKING
 
 import pandas as pd
+from pandas import DataFrame
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
+    from collections.abc import MutableSequence
     from pathlib import Path
 
-    from pandas import DataFrame
+
+Processor = Callable[[DataFrame], DataFrame]
 
 
 class Cacher(ABC):
@@ -18,17 +21,21 @@ class Cacher(ABC):
 
     Parameters
     ----------
-    pre_process : Callable[[DataFrame], DataFrame], optional
+    pre_process: Processor | MutableSequence[Processor] | None, optional
         Function to preprocess the dataframe before caching, by default None
-    post_process : Callable[[DataFrame], DataFrame], optional
+    post_process: Processor | MutableSequence[Processor] | None, optional
         Function to postprocess the dataframe after caching, by default None
     """
 
     def __init__(
         self,
-        pre_process: Callable[[DataFrame], DataFrame] | None = None,
-        post_process: Callable[[DataFrame], DataFrame] | None = None,
+        pre_process: Processor | MutableSequence[Processor] | None = None,
+        post_process: Processor | MutableSequence[Processor] | None = None,
     ) -> None:
+        if callable(pre_process):
+            pre_process = [pre_process]
+        if callable(post_process):
+            post_process = [post_process]
         self._pre_process = pre_process
         self._post_process = post_process
 
@@ -38,19 +45,33 @@ class Cacher(ABC):
         """Get the file suffix/extension for the cache file."""
         ...
 
-    @property
-    def pre_process(self) -> Callable[[DataFrame], DataFrame]:
-        """Get the pre-process function."""
+    def pre_process(self, df: DataFrame) -> DataFrame:
         if self._pre_process is None:
-            return lambda df: df
-        return self._pre_process
+            return df
 
-    @property
-    def post_process(self) -> Callable[[DataFrame], DataFrame]:
-        """Get the post-process function."""
+        for processor in self._pre_process:
+            df = processor(df)  # noqa: PD901
+        return df
+
+    def register_pre_process(self, processor: Processor) -> None:
+        if self._pre_process is None:
+            self._pre_process = [processor]
+        else:
+            self._pre_process.append(processor)
+
+    def post_process(self, df: DataFrame) -> DataFrame:
         if self._post_process is None:
-            return lambda df: df
-        return self._post_process
+            return df
+
+        for processor in self._post_process:
+            df = processor(df)  # noqa: PD901
+        return df
+
+    def register_post_process(self, processor: Processor) -> None:
+        if self._post_process is None:
+            self._post_process = [processor]
+        else:
+            self._post_process.append(processor)
 
     @abstractmethod
     def read_cache(self, cache_file: Path) -> DataFrame:
@@ -127,19 +148,15 @@ class ParquetCacher(Cacher):
 
     Parameters
     ----------
-    pre_process : Callable[[DataFrame], DataFrame], optional
+    pre_process: Processor | MutableSequence[Processor] | None, optional
         Function to preprocess the dataframe before caching, by default None
-    post_process : Callable[[DataFrame], DataFrame], optional
+    post_process: Processor | MutableSequence[Processor] | None, optional
         Function to postprocess the dataframe after caching, by default None
     """
 
-    def __init__(
-        self,
-        pre_process: Callable[[DataFrame], DataFrame] | None = None,
-        post_process: Callable[[DataFrame], DataFrame] | None = None,
-    ) -> None:
-        self._user_pre_process = pre_process
-        super().__init__(self._pq_pre_process, post_process)
+    def pre_process(self, df: DataFrame) -> DataFrame:
+        df = super().pre_process(df)
+        return self._pq_pre_process(df)
 
     def _pq_pre_process(self, input_data: DataFrame) -> DataFrame:
         """
@@ -185,9 +202,9 @@ class CSVCacher(Cacher):
 
     Parameters
     ----------
-    pre_process : Callable[[DataFrame], DataFrame], optional
+    pre_process: Processor | MutableSequence[Processor] | None, optional
         Function to preprocess the dataframe before caching, by default None
-    post_process : Callable[[DataFrame], DataFrame], optional
+    post_process: Processor | MutableSequence[Processor] | None, optional
         Function to postprocess the dataframe after caching, by default None
     """
 
