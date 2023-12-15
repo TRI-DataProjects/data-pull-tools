@@ -156,34 +156,27 @@ class ParquetCacher(Cacher):
 
     def pre_process(self, df: DataFrame) -> DataFrame:
         df = super().pre_process(df)
-        return self._pq_pre_process(df)
+        return self._obj_cols_to_str(df)
 
-    def _pq_pre_process(self, input_data: DataFrame) -> DataFrame:
-        """
-        Preprocess dataframe before caching to Parquet format.
-
-        Converts object columns to strings.
+    def _obj_cols_to_str(self, df: DataFrame) -> DataFrame:
+        """Converts a DataFrame's object columns to strings columns.
+        Necessary for caching as Parquet does not support object columns.
 
         Parameters
         ----------
-        df : DataFrame
+        df: DataFrame
             Input dataframe.
 
         Returns
         -------
         DataFrame
-            Preprocessed dataframe.
+            Dataframe with object columns converted to strings.
         """
-        # Convert object dtypes to str
-        input_data = input_data.convert_dtypes()
-        obj_cols = input_data.select_dtypes(include="object").columns
-        input_data[obj_cols] = input_data[obj_cols].astype(str)
-        input_data[obj_cols] = input_data[obj_cols].replace("nan", pd.NA)
-
-        if self._user_pre_process is not None:
-            input_data = self._user_pre_process(input_data)
-
-        return input_data
+        df = df.convert_dtypes()
+        obj_cols = df.select_dtypes(include="object").columns
+        df[obj_cols] = df[obj_cols].astype(str)
+        df[obj_cols] = df[obj_cols].replace("nan", pd.NA)
+        return df
 
     @property
     def suffix(self) -> str:  # noqa: D102
