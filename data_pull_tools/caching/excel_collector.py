@@ -75,10 +75,10 @@ class ExcelCollector:
         behavior: CacheBehaviorProtocol,
     ) -> None:
         module_logger.info("Reading input file(s)")
-        read_func = reader or self.reader
+        reader = reader or self.reader
         with mp.Pool() as pool:
             read_func = partial(
-                self.reader.read_excel,
+                reader.read_excel,
                 sheet_name=self.sheet_name,
                 cacher=self.collection_cacher,
                 behavior=behavior,
