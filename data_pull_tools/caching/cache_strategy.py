@@ -12,7 +12,7 @@ if TYPE_CHECKING:
     from .cacher import Cacher
 
 
-class CacheBehaviorProtocol(Protocol):
+class CacheStrategyProtocol(Protocol):
     """Some callable that performs an action, such as reading the input file and saving
     it to the specified cache location, eventually returning a DataFrame.
 
@@ -235,8 +235,8 @@ def _from_cache(
     return cacher.post_process(data)
 
 
-class CacheBehavior(Enum):
-    """Enumeration of several default cache behaviors."""
+class CacheStrategy(Enum):
+    """Enumeration of several default cache strategies."""
 
     def __call__(
         self,

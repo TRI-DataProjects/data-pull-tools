@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING
 
 import pandas as pd
 
-from .cache_behavior import CacheBehavior, CacheBehaviorProtocol
+from .cache_strategy import CacheStrategy, CacheStrategyProtocol
 from .cacher import DEFAULT_CACHER
 from .excel_reader import CachedExcelReader
 
@@ -79,7 +79,7 @@ class ExcelCollector:
     def _perform_collect(
         self,
         reader: CachedExcelReader | None,
-        behavior: CacheBehaviorProtocol,
+        strategy: CacheStrategyProtocol,
     ) -> None:
         module_logger.info("Reading input file(s)")
         reader = reader or self.reader
@@ -88,7 +88,7 @@ class ExcelCollector:
                 reader.read_excel,
                 sheet_name=self.sheet_name,
                 cacher=self.collection_cacher,
-                behavior=behavior,
+                strategy=strategy,
             )
             entries = [
                 entry
@@ -123,9 +123,9 @@ class ExcelCollector:
     def collect(
         self,
         collection_reader: CachedExcelReader | None = None,
-        behavior: CacheBehaviorProtocol = CacheBehavior.CHECK_CACHE,
+        behavior: CacheStrategyProtocol = CacheStrategy.CHECK_CACHE,
     ) -> DataFrame:
         module_logger.info("Collecting Excel files.")
         if self._should_collect:
             self._perform_collect(collection_reader, behavior)
-        return self.reader.read_excel(self.output_file, behavior=behavior)
+        return self.reader.read_excel(self.output_file, strategy=behavior)

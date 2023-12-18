@@ -13,7 +13,7 @@ from platformdirs import user_cache_dir
 
 from data_pull_tools.file_utils import hide_file
 
-from .cache_behavior import CacheBehavior, CacheBehaviorProtocol
+from .cache_strategy import CacheStrategy, CacheStrategyProtocol
 from .cacher import DEFAULT_CACHER, Cacher
 
 if TYPE_CHECKING:
@@ -262,7 +262,7 @@ class CachedExcelReader:
         sheet_name: int | str = 0,
         *,
         cacher: Cacher = DEFAULT_CACHER,
-        behavior: CacheBehaviorProtocol = CacheBehavior.CHECK_CACHE,
+        strategy: CacheStrategyProtocol = CacheStrategy.CHECK_CACHE,
     ) -> DataFrame:
         ...
 
@@ -273,7 +273,7 @@ class CachedExcelReader:
         sheet_name: list[int] | list[str] | None,
         *,
         cacher: Cacher = DEFAULT_CACHER,
-        behavior: CacheBehaviorProtocol = CacheBehavior.CHECK_CACHE,
+        strategy: CacheStrategyProtocol = CacheStrategy.CHECK_CACHE,
     ) -> dict[int | str, DataFrame]:
         ...
 
@@ -284,7 +284,7 @@ class CachedExcelReader:
         sheet_name: int | str | list[int] | list[str] | None = 0,
         *,
         cacher: Cacher = DEFAULT_CACHER,
-        behavior: CacheBehaviorProtocol = CacheBehavior.CHECK_CACHE,
+        strategy: CacheStrategyProtocol = CacheStrategy.CHECK_CACHE,
     ) -> DataFrame | dict[int | str, DataFrame]:
         ...
 
@@ -294,7 +294,7 @@ class CachedExcelReader:
         sheet_name: int | str | list[int] | list[str] | None = 0,
         *,
         cacher: Cacher = DEFAULT_CACHER,
-        behavior: CacheBehaviorProtocol = CacheBehavior.CHECK_CACHE,
+        strategy: CacheStrategyProtocol = CacheStrategy.CHECK_CACHE,
     ) -> DataFrame | dict[int | str, DataFrame]:
         """Read an Excel file and cache the result.
 
@@ -307,10 +307,10 @@ class CachedExcelReader:
             sheet positions (chart sheets do not count as a sheet position).
         cacher : Cacher, default DEFAULT_CACHER
             The cacher object for cache operations.
-        behavior : CacheBehaviorProto, default CacheBehavior.CHECK_CACHE
+        strategy : CacheStrategyProto, default CacheStrategy.CHECK_CACHE
             A callable that determines how the input and cache are handled.
-            See `CacheBehavior` for more information and an enumeration of behaviors
-            default behaviors.
+            See `CacheStrategy` for more information and an enumeration of default
+            strategies.
 
         Returns
         -------
@@ -339,7 +339,7 @@ class CachedExcelReader:
                         excel_file,
                         sheet_name,
                         cacher=cacher,
-                        behavior=behavior,
+                        strategy=strategy,
                     )
                     for sheet_name in excel_file.sheet_names
                 }
@@ -353,7 +353,7 @@ class CachedExcelReader:
         )
         reader = partial(pd.read_excel, input_file, sheet_name)
 
-        return behavior(Path(input_file), cache_file, cacher, reader)
+        return strategy(Path(input_file), cache_file, cacher, reader)
 
 
 if __name__ == "__main__":
