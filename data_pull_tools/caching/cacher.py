@@ -1,23 +1,22 @@
 from __future__ import annotations
 
+import logging
 from abc import ABC, abstractmethod
-from collections.abc import Callable
 from typing import TYPE_CHECKING
 
 import pandas as pd
-from pandas import DataFrame
 
 if TYPE_CHECKING:
     from collections.abc import MutableSequence
     from pathlib import Path
 
+    from . import DataFrame, Processor
 
-Processor = Callable[[DataFrame], DataFrame]
+module_logger = logging.getLogger(__name__)
 
 
 class Cacher(ABC):
-    """
-    Abstract base class for caching dataframes.
+    """Abstract base class for caching dataframes.
 
     Parameters
     ----------
@@ -46,6 +45,18 @@ class Cacher(ABC):
         ...
 
     def pre_process(self, df: DataFrame) -> DataFrame:
+        """Apply any registered pre-processors to the DataFrame.
+
+        Parameters
+        ----------
+        df: DataFrame
+            The DataFrame to pre-process.
+
+        Returns
+        -------
+        DataFrame
+            The pre-processed DataFrame.
+        """
         if self._pre_process is None:
             return df
 
@@ -54,12 +65,31 @@ class Cacher(ABC):
         return df
 
     def register_pre_process(self, processor: Processor) -> None:
+        """Register a processor to run before caching the dataframe.
+
+        Parameters
+        ----------
+        processor : Processor
+            The processor function to run before caching.
+        """
         if self._pre_process is None:
             self._pre_process = [processor]
         else:
             self._pre_process.append(processor)
 
     def post_process(self, df: DataFrame) -> DataFrame:
+        """Apply any registered post-processors to the DataFrame.
+
+        Parameters
+        ----------
+        df: DataFrame
+            The DataFrame to post-process.
+
+        Returns
+        -------
+        DataFrame
+            The post-processed DataFrame.
+        """
         if self._post_process is None:
             return df
 
@@ -68,19 +98,25 @@ class Cacher(ABC):
         return df
 
     def register_post_process(self, processor: Processor) -> None:
+        """Register a processor to run after reading the dataframe from the cache.
+
+        Parameters
+        ----------
+        processor : Processor
+            The post-processor function to register.
+        """
         if self._post_process is None:
             self._post_process = [processor]
         else:
             self._post_process.append(processor)
 
-    @abstractmethod
     def read_cache(self, cache_file: Path) -> DataFrame:
-        """
-        Read the cached dataframe from file.
+        """Read the cached dataframe from file and applies any registered
+        post-processors.
 
         Parameters
         ----------
-        cache_file : Path
+        cache_file: Path
             Path to the cache file.
 
         Returns
@@ -88,20 +124,31 @@ class Cacher(ABC):
         DataFrame
             The cached dataframe.
         """
-        ...
+        return self.post_process(self._read_cache(cache_file))
 
     @abstractmethod
-    def write_cache(self, cache_file: Path, df: DataFrame) -> None:
-        """
-        Write the dataframe to the cache file.
+    def _read_cache(self, cache_file: Path) -> DataFrame:
+        """Specific implementation of reading the cache file."""
+        ...
+
+    def write_cache(self, cache_file: Path, df: DataFrame) -> DataFrame:
+        """Applies any registered pre-processors to the DataFrame and writes it to the
+        cache file.
 
         Parameters
         ----------
-        cache_file : Path
+        cache_file: Path
             Path to write the cache file to.
-        df : DataFrame
+        df: DataFrame
             Dataframe to cache.
         """
+        df = self.pre_process(df)
+        self._write_cache(cache_file, df)
+        return df
+
+    @abstractmethod
+    def _write_cache(self, cache_file: Path, df: DataFrame) -> None:
+        """Specific implementation of writing the cache file."""
         ...
 
     def cache_hit(self, input_file: Path, cache_file: Path) -> bool:
@@ -142,8 +189,7 @@ class Cacher(ABC):
 
 
 class ParquetCacher(Cacher):
-    """
-    Cacher using the Parquet file format.
+    """Cacher using the Parquet file format.
     Converts object columns of input DataFrame to strings before caching.
 
     Parameters
@@ -154,8 +200,8 @@ class ParquetCacher(Cacher):
         Function to postprocess the dataframe after caching, by default None
     """
 
-    def pre_process(self, df: DataFrame) -> DataFrame:
-        df = super().pre_process(df)
+    def pre_process(self, df: DataFrame) -> DataFrame:  # noqa: D102
+        df = super().pre_process(df)  # noqa: PD901
         return self._obj_cols_to_str(df)
 
     def _obj_cols_to_str(self, df: DataFrame) -> DataFrame:
@@ -182,16 +228,15 @@ class ParquetCacher(Cacher):
     def suffix(self) -> str:  # noqa: D102
         return ".parquet"
 
-    def read_cache(self, cache_file: Path) -> DataFrame:  # noqa: D102
+    def _read_cache(self, cache_file: Path) -> DataFrame:
         return pd.read_parquet(cache_file)
 
-    def write_cache(self, cache_file: Path, df: DataFrame) -> None:  # noqa: D102
+    def _write_cache(self, cache_file: Path, df: DataFrame) -> None:
         df.to_parquet(cache_file)
 
 
 class CSVCacher(Cacher):
-    """
-    Cacher using the CSV file format.
+    """Cacher using the CSV file format.
 
     Parameters
     ----------
@@ -205,11 +250,11 @@ class CSVCacher(Cacher):
     def suffix(self) -> str:  # noqa: D102
         return ".csv"
 
-    def read_cache(self, cache_file: Path) -> DataFrame:  # noqa: D102
+    def _read_cache(self, cache_file: Path) -> DataFrame:
         return pd.read_csv(cache_file)
 
-    def write_cache(self, cache_file: Path, df: DataFrame) -> None:  # noqa: D102
+    def _write_cache(self, cache_file: Path, df: DataFrame) -> None:
         df.to_csv(cache_file, index=False)
 
 
-DEFAULT_CACHER = ParquetCacher()
+DEFAULT_CACHER = ParquetCacher

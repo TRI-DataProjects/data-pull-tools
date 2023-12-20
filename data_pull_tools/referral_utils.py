@@ -5,22 +5,19 @@ import logging
 import timeit
 from collections.abc import Callable, Mapping
 from functools import partial
-from os import PathLike
 from pathlib import Path
-from typing import TypeVar, Union
+from typing import TypeVar
 
 import pandas as pd
 from pandas import DataFrame
 
-from data_pull_tools.caching import CachedExcelReader, ExcelCollector, ParquetCacher
+from data_pull_tools.caching import DEFAULT_CACHER, ExcelCollector, ExcelReader
 
 module_logger = logging.getLogger(__name__)
 
-StrPath = Union[str, PathLike[str]]
 T = TypeVar("T")
 
 _search_in_minute = "Referral Search Number In Minute"
-_row_key = ["ReferralID", "Date of Action", _search_in_minute]
 _max_searches_per_minute = 10
 
 
@@ -131,7 +128,7 @@ def _read_action_logs(
         "Parent Searched for Programs",
         "Specialist Performed Search",
     ]
-    filtering_cacher = ParquetCacher(
+    filtering_cacher = DEFAULT_CACHER(
         pre_process=lambda df: df.loc[df["Action Log Name"].isin(action_logs_keep)],
     )
 
@@ -141,11 +138,12 @@ def _read_action_logs(
             "referrals",
             cache_dir="referrals",
             cache_location="system",
-            collection_cacher=filtering_cacher,
-        ).collect()
+        ).collect(
+            cacher=filtering_cacher,
+        )
 
     if process_root.is_file():
-        return CachedExcelReader(
+        return ExcelReader(
             process_root.parent,
             cache_location="system",
         ).read_excel(

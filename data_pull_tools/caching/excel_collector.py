@@ -7,69 +7,127 @@ from typing import TYPE_CHECKING
 
 import pandas as pd
 
-from .cache_strategy import CacheStrategy, CacheStrategyProtocol
+from .cache_manager import CacheManager
+from .cache_strategy import CacheStrategy, CacheStrategyType
 from .cacher import DEFAULT_CACHER
-from .excel_reader import CachedExcelReader
+from .excel_reader import ExcelReader
 
 if TYPE_CHECKING:
     from pathlib import Path
 
-    from pandas import DataFrame
+    from . import Cacher, DataFrame, Pathish, ResolveStrategy
 
-    from .cacher import Cacher
-    from .excel_reader import CacheLocation
 
 module_logger = logging.getLogger(__name__)
 
 
-def drop_na_rows_and_cols(
-    df: DataFrame,
-) -> DataFrame:
+def _drop_empty(df: DataFrame) -> DataFrame:
     return df.convert_dtypes().dropna(how="all", axis=1).dropna(how="all", axis=0)
 
 
-class ExcelCollector:
+class ExcelCollector(CacheManager):
+    reader: ExcelReader
+    _output_name: str
+    sheet_name: int | str | list[int | str] | None
+    glob_pattern: str
+    _cacher: Cacher
+    _out_st_mtime: float | None
+
     def __init__(
         self,
-        input_dir: Path,
-        output_file: Path | str,
-        sheet_name: int | str | list[int] | list[str] | None = 0,
+        root_dir: Path,
+        cache_dir: Pathish | None = None,
+        output_name: str | None = None,
+        sheet_name: int | str | list[int | str] | None = 0,
         glob_pattern: str = "*.xlsx",
         *,
-        collection_cacher: Cacher = DEFAULT_CACHER,
-        cache_dir: Path | str | None = None,
-        cache_location: CacheLocation | None = None,
+        cache_resolver: ResolveStrategy | None = None,
+        output_cacher: Cacher | None = None,
     ) -> None:
-        if isinstance(output_file, str):
-            output_file = input_dir / (
-                output_file
-                if output_file.endswith(".xlsx")
-                else (output_file + ".xlsx")
-            )
-
-        self.input_dir = input_dir
-        self.reader = CachedExcelReader(
-            self.input_dir,
-            cache_dir,
-            cache_location=cache_location,
+        super().__init__(
+            root_dir=root_dir,
+            cache_dir=cache_dir,
+            cache_resolver=cache_resolver,
         )
-        self.collection_cacher = collection_cacher
-        self.collection_cacher.register_post_process(drop_na_rows_and_cols)
-        self.output_file = output_file
-        if self.output_file.exists():
-            self.out_st_mtime = self.output_file.stat().st_mtime
-        self.glob_pattern = glob_pattern
+        self.reader = ExcelReader(
+            root_dir=root_dir,
+            cache_dir=cache_dir,
+            cache_resolver=cache_resolver,
+        )
+        self._cacher = output_cacher or DEFAULT_CACHER()
+        self.output_name = output_name
         self.sheet_name = sheet_name
+        self.glob_pattern = glob_pattern
+
+    @property
+    def root_dir(self) -> Path:  # noqa: D102
+        return super().root_dir
+
+    @root_dir.setter
+    def root_dir(self, root_dir: Pathish | None) -> None:
+        super().root_dir = root_dir
+        self.reader.root_dir = root_dir
+
+    @property
+    def cache_dir(self) -> Path:  # noqa: D102
+        return super().cache_dir
+
+    @cache_dir.setter
+    def cache_dir(self, cache_dir: Pathish | None) -> None:
+        super().cache_dir = cache_dir
+        self.reader.cache_dir = cache_dir
+        self._update_output_path()
+
+    @property
+    def cache_resolver(self) -> ResolveStrategy:  # noqa: D102
+        return super().cache_resolver
+
+    @cache_resolver.setter
+    def cache_resolver(self, cache_resolve: ResolveStrategy) -> None:
+        super().cache_resolver = cache_resolve
+        self.reader.cache_resolver = cache_resolve
+
+    @property
+    def cacher(self) -> Cacher:
+        return self._cacher
+
+    @property
+    def output_name(self) -> str:
+        return self._output_name
+
+    @output_name.setter
+    def output_name(self, output_name: str | None) -> None:
+        self._output_name = output_name or self.root_dir.stem
+        self._update_output_path()
+
+    def _update_output_path(self) -> None:
+        self._output_path = self.cache_dir / f"{self.output_name}{self.cacher.suffix}"
+        self._update_st_mtime()
+
+    @property
+    def output_path(self) -> Path:
+        return self._output_path
+
+    def _update_st_mtime(self) -> float | None:
+        if self.output_path.exists():
+            self._out_st_mtime = self.output_path.stat().st_mtime
+        else:
+            self._out_st_mtime = None
+        return self._out_st_mtime
+
+    @property
+    def out_st_mtime(self) -> float:
+        return self._out_st_mtime or self._update_st_mtime() or 0.0
 
     @property
     def _should_collect(self) -> bool:
-        if not self.output_file.exists():
+        if not self.output_path.exists():
             return True
 
-        for entry in self.input_dir.glob(self.glob_pattern):
+        for entry in self.root_dir.glob(self.glob_pattern):
             if (
                 entry.is_file()
-                and entry != self.output_file
+                and entry != self.output_path
                 and entry.stat().st_mtime > self.out_st_mtime
             ):
                 return True
@@ -78,24 +136,26 @@ class ExcelCollector:
 
     def _perform_collect(
         self,
-        reader: CachedExcelReader | None,
-        strategy: CacheStrategyProtocol,
-    ) -> None:
+        reader: ExcelReader | None,
+        cacher: Cacher,
+        strategy: CacheStrategy,
+    ) -> DataFrame:
         module_logger.info("Reading input file(s)")
         reader = reader or self.reader
+
+        read_func = partial(
+            reader.read_excel,
+            sheet_name=self.sheet_name,
+            cacher=cacher,
+            strategy=strategy,
+        )
+        entries = [
+            entry
+            for entry in self.root_dir.glob(self.glob_pattern)
+            if entry.is_file() and entry != self.output_path
+        ]
+
         with mp.Pool() as pool:
-            read_func = partial(
-                reader.read_excel,
-                sheet_name=self.sheet_name,
-                cacher=self.collection_cacher,
-                strategy=strategy,
-            )
-            entries = [
-                entry
-                for entry in self.input_dir.glob(self.glob_pattern)
-                if entry.is_file() and entry != self.output_file
-            ]
-            raw_frames: list[DataFrame | dict[int | str, DataFrame]] = []
             raw_frames = pool.map(read_func, entries)
 
         def _valid_frame(df: DataFrame) -> bool:
@@ -105,27 +165,31 @@ class ExcelCollector:
         for frame in raw_frames:
             if isinstance(frame, dict):
                 frames.extend(
-                    [df for df in frame.values() if _valid_frame(df)],
+                    [_drop_empty(df) for df in frame.values() if _valid_frame(df)],
                 )
             elif _valid_frame(frame):
-                frames.append(frame)
+                frames.append(_drop_empty(frame))
 
         if len(frames) == 0:
             module_logger.info("No data collected.")
-            return
+            return pd.DataFrame()
 
         module_logger.info("Saving result")
 
         collected = pd.concat(frames, ignore_index=True, copy=False).convert_dtypes()
-        collected.to_excel(self.output_file, index=False)
-        self.out_st_mtime = self.output_file.stat().st_mtime
+        collected = self.cacher.write_cache(self.output_path, collected)
+        self._update_st_mtime()
+        return collected
 
     def collect(
         self,
-        collection_reader: CachedExcelReader | None = None,
-        behavior: CacheStrategyProtocol = CacheStrategy.CHECK_CACHE,
+        reader: ExcelReader | None = None,
+        cacher: Cacher | None = None,
+        strategy: CacheStrategy = CacheStrategyType.CHECK_CACHE,
     ) -> DataFrame:
         module_logger.info("Collecting Excel files.")
         if self._should_collect:
-            self._perform_collect(collection_reader, behavior)
-        return self.reader.read_excel(self.output_file, strategy=behavior)
+            cacher = cacher or DEFAULT_CACHER()
+            return self._perform_collect(reader, cacher, strategy)
+
+        return self.cacher.read_cache(self.output_path)

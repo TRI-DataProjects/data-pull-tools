@@ -10,11 +10,11 @@ from typing import TYPE_CHECKING
 from platformdirs import user_downloads_dir
 
 from data_pull_tools.caching import (
-    CachedExcelReader,
+    DEFAULT_CACHER,
     ExcelCollector,
-    ParquetCacher,
+    ExcelReader,
+    ResolveStrategyType,
 )
-from data_pull_tools.prompt_utils import DirPrompt
 
 if TYPE_CHECKING:
     from pandas import DataFrame
@@ -69,23 +69,22 @@ def process_action_logs(
     module_logger.info("Reading action logs from '%s'", process_root)
     st_time: float = timeit.default_timer()
 
-    renaming_cacher = ParquetCacher(
+    renaming_cacher = DEFAULT_CACHER(
         pre_process=_rename_columns,
     )
 
     if process_root.is_dir():
-        collector = ExcelCollector(
-            process_root,
-            "action_logs",
+        action_logs = ExcelCollector(
+            root_dir=process_root,
             cache_dir="action_logs",
-            cache_location="system",
-            collection_cacher=renaming_cacher,
+            cache_resolver=ResolveStrategyType.RESOLVE_TO_SYSTEM,
+        ).collect(
+            cacher=renaming_cacher,
         )
-        action_logs = collector.collect()
     elif process_root.is_file():
-        action_logs = CachedExcelReader(
+        action_logs = ExcelReader(
             process_root.parent,
-            cache_location="system",
+            cache_resolver=ResolveStrategyType.RESOLVE_TO_SYSTEM,
         ).read_excel(
             process_root.name,
             cacher=renaming_cacher,
@@ -107,7 +106,7 @@ def process_action_logs(
 
 
 if __name__ == "__main__":
-    from prompt_utils import FilePrompt
+    from prompt_utils import DirPrompt, FilePrompt
     from rich.prompt import Confirm
     from toml_utils import load_toml, update_toml_file_value
 

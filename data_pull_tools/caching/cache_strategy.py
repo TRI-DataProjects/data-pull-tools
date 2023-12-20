@@ -4,15 +4,12 @@ from enum import Enum, member
 from typing import TYPE_CHECKING, Protocol
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
     from pathlib import Path
 
-    from pandas import DataFrame
-
-    from .cacher import Cacher
+    from . import Cacher, DataFrame, FrameReader
 
 
-class CacheStrategyProtocol(Protocol):
+class CacheStrategy(Protocol):
     """Some callable that performs an action, such as reading the input file and saving
     it to the specified cache location, eventually returning a DataFrame.
 
@@ -22,9 +19,9 @@ class CacheStrategyProtocol(Protocol):
         The input file path.
     cache_file : Path
         The cache file path.
-    cacher : Cacher, default=DEFAULT_CACHER
+    cacher : Cacher
         The cacher object for cache operations.
-    reader : Callable[[], DataFrame]
+    reader : FrameReader
         The function to read in new data, assumedly from the input file.
 
     Returns
@@ -38,7 +35,7 @@ class CacheStrategyProtocol(Protocol):
         input_file: Path,
         cache_file: Path,
         cacher: Cacher,
-        reader: Callable[[], DataFrame],
+        reader: FrameReader,
     ) -> DataFrame:
         """Perform some action, such as reading the input file and saving it to the
         specified cache location, eventually returning a DataFrame.
@@ -51,7 +48,7 @@ class CacheStrategyProtocol(Protocol):
             The cache file path.
         cacher : Cacher, default=DEFAULT_CACHER
             The cacher object for cache operations.
-        reader : Callable[[], DataFrame]
+        reader : FrameReader
             The function to read in new data, assumedly from the input file.
 
         Returns
@@ -66,7 +63,7 @@ def _check_cache(
     input_file: Path,
     cache_file: Path,
     cacher: Cacher,
-    reader: Callable[[], DataFrame],
+    reader: FrameReader,
 ) -> DataFrame:
     """Checks cache and returns DataFrame, reading input only when necessary.
 
@@ -81,7 +78,7 @@ def _check_cache(
         The cache file path.
     cacher : Cacher, default=DEFAULT_CACHER
         The cacher object for cache operations.
-    reader : Callable[[], DataFrame]
+    reader : FrameReader
         The function to read in new data, assumedly from the input file.
 
     Returns
@@ -90,12 +87,9 @@ def _check_cache(
         The cached or freshly read DataFrame.
     """
     if cacher.cache_hit(input_file, cache_file):
-        return cacher.post_process(cacher.read_cache(cache_file))
+        return cacher.read_cache(cache_file)
 
-    data = reader()
-    data = cacher.pre_process(data)
-    cacher.write_cache(cache_file, data)
-
+    data = cacher.write_cache(cache_file, reader())
     return cacher.post_process(data)
 
 
@@ -103,7 +97,7 @@ def _fallback_to_cache(
     input_file: Path,
     cache_file: Path,
     cacher: Cacher,
-    reader: Callable[[], DataFrame],
+    reader: FrameReader,
 ) -> DataFrame:
     """Checks cache and returns DataFrame, reading input only when necessary.
     If input reading fails, attempts to re-use cache if available.
@@ -121,7 +115,7 @@ def _fallback_to_cache(
         The cache file path.
     cacher : Cacher, default=DEFAULT_CACHER
         The cacher object for cache operations.
-    reader : Callable[[], DataFrame]
+    reader : FrameReader
         The function to read in new data, assumedly from the input file.
 
     Returns
@@ -130,7 +124,7 @@ def _fallback_to_cache(
         The cached or freshly read DataFrame.
     """
     if cacher.cache_hit(input_file, cache_file):
-        return cacher.post_process(cacher.read_cache(cache_file))
+        return cacher.read_cache(cache_file)
 
     try:
         data = reader()
@@ -139,11 +133,10 @@ def _fallback_to_cache(
             # Not even the cache can save us
             raise e from None
         # Fall back to the cache
-        return cacher.post_process(cacher.read_cache(cache_file))
+        return cacher.read_cache(cache_file)
 
     # There was a cache miss but we successfully read input data
-    data = cacher.pre_process(data)
-    cacher.write_cache(cache_file, data)
+    data = cacher.write_cache(cache_file, data)
     return cacher.post_process(data)
 
 
@@ -151,7 +144,7 @@ def _force_cache_update(
     input_file: Path,  # noqa: ARG001
     cache_file: Path,
     cacher: Cacher,
-    reader: Callable[[], DataFrame],
+    reader: FrameReader,
 ) -> DataFrame:
     """Forces an update of the cache from the input data.
 
@@ -165,7 +158,7 @@ def _force_cache_update(
         The cache file path.
     cacher : Cacher, default=DEFAULT_CACHER
         The cacher object for cache operations.
-    reader : Callable[[], DataFrame]
+    reader : FrameReader
         The function to read in new data, assumedly from the input file.
 
     Returns
@@ -173,9 +166,7 @@ def _force_cache_update(
     DataFrame
         The freshly cached DataFrame.
     """
-    data = reader()
-    data = cacher.pre_process(data)
-    cacher.write_cache(cache_file, data)
+    data = cacher.write_cache(cache_file, reader())
     return cacher.post_process(data)
 
 
@@ -183,7 +174,7 @@ def _skip_cache(
     input_file: Path,  # noqa: ARG001
     cache_file: Path,  # noqa: ARG001
     cacher: Cacher,
-    reader: Callable[[], DataFrame],
+    reader: FrameReader,
 ) -> DataFrame:
     """Reads the input file directly, skips all interaction with the cache.
 
@@ -195,7 +186,7 @@ def _skip_cache(
         The cache file path.
     cacher : Cacher, default=DEFAULT_CACHER
         The cacher object for cache operations.
-    reader : Callable[[], DataFrame]
+    reader : FrameReader
         The function to read in new data, assumedly from the input file.
 
     Returns
@@ -211,7 +202,7 @@ def _from_cache(
     input_file: Path,  # noqa: ARG001
     cache_file: Path,
     cacher: Cacher,
-    reader: Callable[[], DataFrame],  # noqa: ARG001
+    reader: FrameReader,  # noqa: ARG001
 ) -> DataFrame:
     """Reads the cached DataFrame directly, ignoring input data.
 
@@ -223,7 +214,7 @@ def _from_cache(
         The cache file path.
     cacher : Cacher, default=DEFAULT_CACHER
         The cacher object for cache operations.
-    reader : Callable[[], DataFrame]
+    reader : FrameReader
         The function to read in new data, assumedly from the input file.
 
     Returns
@@ -231,11 +222,10 @@ def _from_cache(
     DataFrame
         The cached DataFrame.
     """
-    data = cacher.read_cache(cache_file)
-    return cacher.post_process(data)
+    return cacher.read_cache(cache_file)
 
 
-class CacheStrategy(Enum):
+class CacheStrategyType(Enum):
     """Enumeration of several default cache strategies."""
 
     def __call__(
@@ -243,7 +233,7 @@ class CacheStrategy(Enum):
         input_file: Path,
         cache_file: Path,
         cacher: Cacher,
-        reader: Callable[[], DataFrame],
+        reader: FrameReader,
     ) -> DataFrame:
         """Call the associated cache function."""
         return self.value(input_file, cache_file, cacher, reader)  # type: ignore reportGeneralTypeIssues
@@ -253,3 +243,6 @@ class CacheStrategy(Enum):
     FORCE_CACHE_UPDATE = member(_force_cache_update)
     SKIP_CACHE = member(_skip_cache)
     FROM_CACHE = member(_from_cache)
+
+
+DEFAULT_CACHE_STRATEGY = CacheStrategyType.CHECK_CACHE

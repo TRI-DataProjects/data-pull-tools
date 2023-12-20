@@ -7,8 +7,6 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from contextlib import contextmanager
-from dataclasses import dataclass
-from datetime import datetime, timezone
 from functools import partial
 from os import PathLike
 from pathlib import Path
@@ -20,11 +18,11 @@ from tomlkit.items import Table
 
 if TYPE_CHECKING:
     from collections.abc import Generator
-    from typing import Any, TypeAlias
+    from typing import Any
 
     from tomlkit.container import Container
 
-StrPath: TypeAlias = str | PathLike[str]
+Pathish = str | PathLike[str] | Path
 
 
 K = TypeVar("K")
@@ -36,14 +34,14 @@ DEFAULT_COLLISION_POLICY: CollisionPolicy = "replace"
 
 @contextmanager
 def manage_toml_file(
-    path: StrPath | Path,
+    path: Pathish,
 ) -> Generator[TOMLDocument, Any, None]:
     """Manages a toml file in a context.
     Loads the file, yields the contents, and then saves when the context exits.
 
     Parameters
     ----------
-    path : StrPath | Path
+    path : Pathish
         The path to the toml file.
 
     Yields
@@ -61,13 +59,13 @@ def manage_toml_file(
 
 
 def load_toml(
-    path: StrPath | Path,
+    path: Pathish,
 ) -> TOMLDocument:
     """Loads a toml file into memory.
 
     Parameters
     ----------
-    path : StrPath | Path
+    path : Pathish
         The path to the toml file.
 
     Returns
@@ -163,7 +161,7 @@ def update_toml_values(
 
 
 def update_toml_file(
-    toml_path: StrPath | Path,
+    toml_path: Pathish,
     data: RecursiveMap[str, Any],
     *,
     collisions: CollisionPolicy = "replace",
@@ -173,7 +171,7 @@ def update_toml_file(
 
     Parameters
     ----------
-    toml_path : StrPath | Path
+    toml_path : Pathish
         The path to the toml file to update.
     data : RecursiveMap[str, Any]
         The data to update the toml with.
@@ -199,7 +197,7 @@ def update_toml_value(
 
 
 def update_toml_file_value(
-    toml_path: StrPath | Path,
+    toml_path: Pathish,
     key_chain: list[str],
     value: Any,  # noqa: ANN401
     *,
@@ -207,38 +205,3 @@ def update_toml_file_value(
 ) -> None:
     with manage_toml_file(toml_path) as toml_file:
         update_toml_value(toml_file, key_chain, value, collisions=collisions)
-
-
-@dataclass
-class CachedTOML:
-    toml: TOMLDocument
-    loaded: float
-
-
-class CachedTOMLReader:
-    _cache: dict[Path, CachedTOML]
-
-    def __init__(self) -> None:
-        self._cache = {}
-
-    def load(self, path: StrPath) -> dict[str, Any]:
-        if not isinstance(path, Path):
-            path = Path(path)
-
-        if not path.exists():
-            msg = f"Provided path '{path}' does not exist."
-            raise ValueError(msg)
-
-        last_modified = path.stat().st_mtime
-
-        # Reuse the cache if we can
-        if path in self._cache and self._cache[path].loaded > last_modified:
-            return self._cache[path].toml
-
-        # Populate the cache when we need to
-        toml_data = load_toml(path)
-        self._cache[path] = CachedTOML(
-            toml_data,
-            datetime.now(tz=timezone.utc).timestamp(),
-        )
-        return toml_data
