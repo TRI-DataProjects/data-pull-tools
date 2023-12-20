@@ -11,7 +11,12 @@ from typing import TypeVar
 import pandas as pd
 from pandas import DataFrame
 
-from data_pull_tools.caching import DEFAULT_CACHER, ExcelCollector, ExcelReader
+from data_pull_tools.caching import (
+    DEFAULT_CACHER,
+    ExcelCollector,
+    ExcelReader,
+    ResolveStrategyType,
+)
 
 module_logger = logging.getLogger(__name__)
 
@@ -134,20 +139,20 @@ def _read_action_logs(
 
     if process_root.is_dir():
         return ExcelCollector(
-            process_root,
-            "referrals",
+            root_dir=process_root,
             cache_dir="referrals",
-            cache_location="system",
+            cache_resolver=ResolveStrategyType.RESOLVE_TO_SYSTEM,
         ).collect(
             cacher=filtering_cacher,
         )
 
     if process_root.is_file():
         return ExcelReader(
-            process_root.parent,
-            cache_location="system",
+            root_dir=process_root.parent,
+            cache_dir="referrals",
+            cache_resolver=ResolveStrategyType.RESOLVE_TO_SYSTEM,
         ).read_excel(
-            process_root.name,
+            input_file=process_root.name,
             cacher=filtering_cacher,
         )
 

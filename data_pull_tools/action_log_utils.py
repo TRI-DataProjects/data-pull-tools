@@ -83,10 +83,11 @@ def process_action_logs(
         )
     elif process_root.is_file():
         action_logs = ExcelReader(
-            process_root.parent,
+            root_dir=process_root.parent,
+            cache_dir="action_logs",
             cache_resolver=ResolveStrategyType.RESOLVE_TO_SYSTEM,
         ).read_excel(
-            process_root.name,
+            input_file=process_root.name,
             cacher=renaming_cacher,
         )
     else:
