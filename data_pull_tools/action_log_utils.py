@@ -109,9 +109,7 @@ def process_action_logs(
 if __name__ == "__main__":
     from prompt_utils import DirPrompt, FilePrompt
     from rich.prompt import Confirm
-    from toml_utils import load_toml, update_toml_file_value
-
-    from data_pull_tools.mapping_utils import traverse_mapping
+    from toml_utils import get_toml_item, load_toml, update_toml_file_value
 
     module_logger.setLevel(logging.DEBUG)
     module_logger.addHandler(logging.StreamHandler())
@@ -126,7 +124,7 @@ if __name__ == "__main__":
 
     if config_path.exists():
         toml = load_toml(config_path)
-        root = traverse_mapping(toml, ["action_log", "root"])
+        root = get_toml_item(toml, ["action_log", "root"])
         if isinstance(root, str):
             al_root = Path(root)
 

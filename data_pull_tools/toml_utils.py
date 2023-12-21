@@ -5,7 +5,7 @@ Includes functions to load TOML files, get or create tables, and update values.
 """
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from contextlib import contextmanager
 from functools import partial
 from os import PathLike
@@ -14,15 +14,16 @@ from typing import TYPE_CHECKING, Literal, TypeVar
 
 import tomlkit
 from tomlkit import TOMLDocument, table
-from tomlkit.items import Table
+from tomlkit.container import Container
+from tomlkit.items import Item, Table
 
 if TYPE_CHECKING:
     from collections.abc import Generator
     from typing import Any
 
-    from tomlkit.container import Container
 
 Pathish = str | PathLike[str] | Path
+Containerish = Container | Table
 
 
 K = TypeVar("K")
@@ -83,7 +84,7 @@ class NonTableKeyCollisionError(Exception):
 
 
 def _toml_get_or_table(
-    toml: Container | Table,
+    toml: Containerish,
     key: str,
     *,
     collisions: CollisionPolicy = "replace",
@@ -92,7 +93,7 @@ def _toml_get_or_table(
 
     Parameters
     ----------
-    toml : Container | Table
+    toml : Containerish
         The parent toml object.
     key : str
         The key to get or create the table at.
@@ -127,17 +128,17 @@ def _toml_get_or_table(
 
 
 def update_toml_values(
-    toml: Container | Table,
+    toml: Containerish,
     data: RecursiveMap[str, Any],
     *,
     collisions: CollisionPolicy = "replace",
-) -> Container | Table:
+) -> Containerish:
     """Updates the given toml values with the provided data.
     Creates intermediary tables as needed.
 
     Parameters
     ----------
-    toml : Container | Table
+    toml : Containerish
         The toml object to update.
     data : RecursiveMap[str, Any]
         The data to update the toml with.
@@ -146,7 +147,7 @@ def update_toml_values(
 
     Returns
     -------
-    Container | Table
+    Containerish
         The updated toml object.
     """
     getter = partial(_toml_get_or_table, toml=toml, collisions=collisions)
@@ -183,13 +184,16 @@ def update_toml_file(
 
 
 def update_toml_value(
-    toml: Container | Table,
-    key_chain: list[str],
+    toml: Containerish,
+    key_chain: str | Sequence[str],
     value: Any,  # noqa: ANN401
     *,
     collisions: CollisionPolicy = "replace",
-) -> Container | Table:
+) -> Containerish:
     current = toml
+    if isinstance(key_chain, str):
+        key_chain = [key_chain]
+
     for key in key_chain[:-1]:
         current = _toml_get_or_table(current, key, collisions=collisions)
     current[key_chain[-1]] = value
@@ -198,10 +202,51 @@ def update_toml_value(
 
 def update_toml_file_value(
     toml_path: Pathish,
-    key_chain: list[str],
+    key_chain: str | Sequence[str],
     value: Any,  # noqa: ANN401
     *,
     collisions: CollisionPolicy = "replace",
 ) -> None:
     with manage_toml_file(toml_path) as toml_file:
         update_toml_value(toml_file, key_chain, value, collisions=collisions)
+
+
+def _get_toml_or_none(
+    toml: Containerish,
+    key: str,
+) -> Item | Container | None:
+    if key not in toml:
+        return None
+    return toml[key]
+
+
+def get_toml_container(
+    toml: Containerish,
+    key_chain: str | Sequence[str],
+) -> Containerish | None:
+    current = toml
+    if isinstance(key_chain, str):
+        key_chain = [key_chain]
+
+    for key in key_chain:
+        if current is None or not isinstance(current, Containerish):
+            # Exhausted early
+            return None
+        current = _get_toml_or_none(current, key)
+    return current if isinstance(current, Containerish) else None
+
+
+def get_toml_item(
+    toml: Containerish,
+    key_chain: str | Sequence[str],
+) -> Item | None:
+    current = toml
+    if isinstance(key_chain, str):
+        key_chain = [key_chain]
+
+    for key in key_chain:
+        if current is None or not isinstance(current, Containerish):
+            # Exhausted early
+            return None
+        current = _get_toml_or_none(current, key)
+    return current if not isinstance(current, Containerish) else None
