@@ -70,7 +70,7 @@ def prog_has_rates_caps(df: pd.DataFrame, age_details: pd.DataFrame) -> pd.DataF
 def invalid_programs_mask(
     df: pd.DataFrame,
     filter_status: bool = True,
-) -> pd.Series[bool]:
+) -> "pd.Series[bool]":
     invalid_masks = {
         "Status": df["Status"] != "Active",
         "TEST In License": df["License"].str.contains(
@@ -125,7 +125,7 @@ def type_code_programs(df: pd.DataFrame, dropna: bool = False) -> pd.DataFrame:
         df[col.value] = df[col.value].str.strip()
 
     # Create masks for re-use
-    masks: dict[str, dict[str, pd.Series[bool]]] = {
+    masks: dict[str, dict[str, "pd.Series[bool]"]] = {
         Col.PROV_TYPE: {
             "Licensed Home": df[Col.PROV_TYPE] == "Licensed Home",
             "Licensed Center": df[Col.PROV_TYPE] == "Licensed Center",
@@ -171,7 +171,7 @@ def type_code_programs(df: pd.DataFrame, dropna: bool = False) -> pd.DataFrame:
         masks[m_key] = m_dict
 
     # Create conditions and replacements
-    replacement_conditions: dict[str, pd.Series[bool]] = {
+    replacement_conditions: dict[str, "pd.Series[bool]"] = {
         "CC": (
             (masks[Col.PROV_TYPE]["Licensed Center"])
             & (masks[Col.LIC]["CC"])
@@ -257,7 +257,7 @@ def type_code_programs(df: pd.DataFrame, dropna: bool = False) -> pd.DataFrame:
 
 
 def sda_code_programs(df: pd.DataFrame) -> pd.DataFrame:
-    masks: dict[int, pd.Series[bool]] = {}
+    masks: dict[int, "pd.Series[bool]"] = {}
     for region in Regions:
         sda = region.value.sda
         region = region.value.region
