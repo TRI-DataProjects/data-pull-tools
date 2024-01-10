@@ -9,7 +9,7 @@ class Region:
     counties: list[str]
 
 
-class RegionEnum(Region, Enum):
+class RegionEnum(Enum):
     BLUE_MOUNTAIN = Region(
         "Blue Mountain",
         1,

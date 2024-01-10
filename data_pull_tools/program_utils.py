@@ -110,7 +110,7 @@ def remove_invalid_programs(
 
 
 def type_code_programs(df: pd.DataFrame, dropna: bool = False) -> pd.DataFrame:
-    class Col(str, Enum):
+    class Col(Enum):
         PROV_TYPE = "Provider Type"
         PROG_TYPES = "Program Types"
         LIC = "License"
@@ -121,7 +121,7 @@ def type_code_programs(df: pd.DataFrame, dropna: bool = False) -> pd.DataFrame:
         df[col.value] = df[col.value].str.strip()
 
     # Create masks for re-use
-    masks: dict[str, dict[str, "pd.Series[bool]"]] = {
+    masks: dict[Col, dict[str, "pd.Series[bool]"]] = {
         Col.PROV_TYPE: {
             "Licensed Home": df[Col.PROV_TYPE] == "Licensed Home",
             "Licensed Center": df[Col.PROV_TYPE] == "Licensed Center",
@@ -275,7 +275,7 @@ def sda_code_programs(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
-class ProgramType(str, Enum):
+class ProgramType(Enum):
     PS = "Preschool"
     HS = "Head Start (OPK)"
     EHS = "Early Head Start (OPK)"
@@ -337,7 +337,7 @@ class NamedRange(Generic[RangeType]):
         return f"{label} ({l_bound}+)"
 
 
-class AgeRange(NamedRange[int], Enum):
+class AgeRange(Enum):
     INFANT = NamedRange("Infant", 0, 2 * MONTHS_PER_YEAR)
     TODDLER = NamedRange("Toddler", 2 * MONTHS_PER_YEAR, 3 * MONTHS_PER_YEAR)
     PRESCHOOL = NamedRange("Preschool", 3 * MONTHS_PER_YEAR, 5 * MONTHS_PER_YEAR)
