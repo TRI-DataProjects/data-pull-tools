@@ -1,10 +1,11 @@
 from dataclasses import dataclass
 from enum import Enum
+from typing import Generic, TypeVar
 
 import numpy as np
 import pandas as pd
 
-from data_pull_tools.region_utils import Regions
+from data_pull_tools.region_utils import RegionEnum
 
 
 def dhs_to_odhs_names(df: pd.DataFrame) -> pd.DataFrame:
@@ -37,34 +38,29 @@ def prog_has_rates_caps(df: pd.DataFrame, age_details: pd.DataFrame) -> pd.DataF
     )
 
     # Find programs that have rates
-    df = pd.merge(
-        left=df,
-        how="left",
+    df = df.merge(
         right=progs_with_rates,
+        how="left",
         on="Record ID",
         indicator=True,
-    )
-    df = df.drop_duplicates()
+    ).drop_duplicates()
 
     df["Has Rate"] = df["_merge"] != "left_only"
     df = df[df["_merge"] != "right_only"]
     df = df.drop("_merge", axis=1)
 
     # Find programs that have capacities
-    df = pd.merge(
-        left=df,
-        how="left",
+    df = df.merge(
         right=progs_with_capacities,
+        how="left",
         on="Record ID",
         indicator=True,
-    )
-    df = df.drop_duplicates()
+    ).drop_duplicates()
 
     df["Has Capacity"] = df["_merge"] != "left_only"
     df = df[df["_merge"] != "right_only"]
-    df = df.drop("_merge", axis=1)
 
-    return df
+    return df.drop("_merge", axis=1)
 
 
 def invalid_programs_mask(
@@ -258,10 +254,11 @@ def type_code_programs(df: pd.DataFrame, dropna: bool = False) -> pd.DataFrame:
 
 def sda_code_programs(df: pd.DataFrame) -> pd.DataFrame:
     masks: dict[int, "pd.Series[bool]"] = {}
-    for region in Regions:
-        sda = region.value.sda
-        region = region.value.region
-        masks[sda] = (df["Region"].str.strip() == region).fillna(False)
+    for region in RegionEnum:
+        val = region.value
+        sda = val.sda
+        name = val.region
+        masks[sda] = (df["Region"].str.strip() == name).fillna(False)
 
     # Break into component parts for numpy
     replacements = list(masks.keys())
@@ -278,7 +275,7 @@ def sda_code_programs(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
-class Program_Types(Enum):
+class ProgramType(str, Enum):
     PS = "Preschool"
     HS = "Head Start (OPK)"
     EHS = "Early Head Start (OPK)"
@@ -295,7 +292,7 @@ class Program_Types(Enum):
 
 def flag_program_types(df: pd.DataFrame) -> pd.DataFrame:
     df["Program Types"] = df["Program Types"].str.strip()
-    for prog_type in Program_Types:
+    for prog_type in ProgramType:
         mask = (
             df["Program Types"]
             .str.contains(prog_type.value, regex=False, case=False)
@@ -321,28 +318,30 @@ def care_for_ages_total_months(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
-@dataclass(frozen=True)
-class Age_Range:
-    label: str
-    lower_bound: float
-    upper_bound: float | None
+RangeType = TypeVar("RangeType", int, float)
 
-    def to_col_name(self) -> str:
+
+@dataclass(frozen=True)
+class NamedRange(Generic[RangeType]):
+    label: str
+    lower_bound: RangeType
+    upper_bound: RangeType | None
+
+    def __str__(self) -> str:
         label = self.label
         l_bound = self.lower_bound
         u_bound = self.upper_bound
 
         if u_bound is not None:
-            return f"{label} ({round(l_bound)}-{round(u_bound)})"
-        else:
-            return f"{label} ({round(l_bound)}+)"
+            return f"{label} ({l_bound}-{u_bound})"
+        return f"{label} ({l_bound}+)"
 
 
-class Age_Ranges(Enum):
-    INFANT = Age_Range("Infant", 0, 2 * MONTHS_PER_YEAR)
-    TODDLER = Age_Range("Toddler", 2 * MONTHS_PER_YEAR, 3 * MONTHS_PER_YEAR)
-    PRESCHOOL = Age_Range("Preschool", 3 * MONTHS_PER_YEAR, 5 * MONTHS_PER_YEAR)
-    SCHOOL_AGE = Age_Range("School Age", 5 * MONTHS_PER_YEAR, None)
+class AgeRange(NamedRange[int], Enum):
+    INFANT = NamedRange("Infant", 0, 2 * MONTHS_PER_YEAR)
+    TODDLER = NamedRange("Toddler", 2 * MONTHS_PER_YEAR, 3 * MONTHS_PER_YEAR)
+    PRESCHOOL = NamedRange("Preschool", 3 * MONTHS_PER_YEAR, 5 * MONTHS_PER_YEAR)
+    SCHOOL_AGE = NamedRange("School Age", 5 * MONTHS_PER_YEAR, None)
 
 
 def care_for_flag_from_total_months(df: pd.DataFrame) -> pd.DataFrame:
@@ -355,17 +354,17 @@ def care_for_flag_from_total_months(df: pd.DataFrame) -> pd.DataFrame:
 
     df["Unknown Care Range"] = ~valid_range_mask
 
-    for a_range in Age_Ranges:
-        a_range = a_range.value
+    for range_member in AgeRange:
+        a_range = range_member.value
         l_bound = a_range.lower_bound
         u_bound = a_range.upper_bound
 
         mask = valid_range_mask.copy()
 
-        mask &= (l_bound <= df[to_months]).fillna(False)
+        mask &= (l_bound <= df[to_months]).fillna(False)  # noqa: FBT003
         if u_bound is not None:
-            mask &= (df[from_months] < u_bound).fillna(False)
+            mask &= (df[from_months] < u_bound).fillna(False)  # noqa: FBT003
 
-        df[a_range.to_col_name()] = mask
+        df[str(a_range)] = mask
 
     return df
