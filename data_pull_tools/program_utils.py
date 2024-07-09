@@ -121,42 +121,50 @@ def type_code_programs(df: pd.DataFrame, dropna: bool = False) -> pd.DataFrame:
         df[col.value] = df[col.value].str.strip()
 
     # Create masks for re-use
-    masks: dict[Col, dict[str, "pd.Series[bool]"]] = {
+    masks: dict[Col, dict[str, pd.Series[bool]]] = {
         Col.PROV_TYPE: {
-            "Licensed Home": df[Col.PROV_TYPE] == "Licensed Home",
-            "Licensed Center": df[Col.PROV_TYPE] == "Licensed Center",
-            "License Exempt Home": df[Col.PROV_TYPE] == "License Exempt Home",
-            "License Exempt Center": df[Col.PROV_TYPE] == "License Exempt Center",
-            "Interim Emergency Site": df[Col.PROV_TYPE] == "Interim Emergency Site",
+            "Licensed Home": (df[Col.PROV_TYPE.value] == "Licensed Home"),
+            "Licensed Center": (df[Col.PROV_TYPE.value] == "Licensed Center"),
+            "License Exempt Home": (df[Col.PROV_TYPE.value] == "License Exempt Home"),
+            "License Exempt Center": (
+                df[Col.PROV_TYPE.value] == "License Exempt Center"
+            ),
+            "Interim Emergency Site": (
+                df[Col.PROV_TYPE.value] == "Interim Emergency Site"
+            ),
         },
         Col.PROG_TYPES: {
-            "PS": df[Col.PROG_TYPES].str.contains("Preschool", regex=False, case=False),
-            "SA": df[Col.PROG_TYPES].str.contains(
+            "PS": df[Col.PROG_TYPES.value].str.contains(
+                "Preschool",
+                regex=False,
+                case=False,
+            ),
+            "SA": df[Col.PROG_TYPES.value].str.contains(
                 "School Age",
                 regex=False,
                 case=False,
             ),
         },
         Col.LIC: {
-            "CC": df[Col.LIC].str[:2].str.upper() == "CC",
-            "CF": df[Col.LIC].str[:2].str.upper() == "CF",
-            "RF": df[Col.LIC].str[:2].str.upper() == "RF",
-            "RS": df[Col.LIC].str[:2].str.upper() == "RS",
-            "PS": df[Col.LIC].str[:2].str.upper() == "PS",
-            "SA": df[Col.LIC].str[:2].str.upper() == "SA",
-            "RA": df[Col.LIC].str[:2].str.upper() == "RA",
-            "AP": df[Col.LIC].str[:2].str.upper() == "AP",
-            "IQY": df[Col.LIC].str[:3].str.upper() == "IQY",
+            "CC": df[Col.LIC.value].str[:2].str.upper() == "CC",
+            "CF": df[Col.LIC.value].str[:2].str.upper() == "CF",
+            "RF": df[Col.LIC.value].str[:2].str.upper() == "RF",
+            "RS": df[Col.LIC.value].str[:2].str.upper() == "RS",
+            "PS": df[Col.LIC.value].str[:2].str.upper() == "PS",
+            "SA": df[Col.LIC.value].str[:2].str.upper() == "SA",
+            "RA": df[Col.LIC.value].str[:2].str.upper() == "RA",
+            "AP": df[Col.LIC.value].str[:2].str.upper() == "AP",
+            "IQY": df[Col.LIC.value].str[:3].str.upper() == "IQY",
         },
         Col.REG: {
-            "CC": df[Col.REG] == "Licensed Child Care Center",
-            "CF": df[Col.REG] == "Certified Family Child Care",
-            "RF": df[Col.REG] == "Registered Family Child Care",
-            "RS": df[Col.REG] == "Regulated Subsidy",
-            "PS": df[Col.REG] == "Recorded Preschool Program",
-            "SA": df[Col.REG] == "Recorded School Age Program",
-            "RA": df[Col.REG] == "Recorded Agency",
-            "UN": df[Col.REG] == "Unlicensed",
+            "CC": df[Col.REG.value] == "Licensed Child Care Center",
+            "CF": df[Col.REG.value] == "Certified Family Child Care",
+            "RF": df[Col.REG.value] == "Registered Family Child Care",
+            "RS": df[Col.REG.value] == "Regulated Subsidy",
+            "PS": df[Col.REG.value] == "Recorded Preschool Program",
+            "SA": df[Col.REG.value] == "Recorded School Age Program",
+            "RA": df[Col.REG.value] == "Recorded Agency",
+            "UN": df[Col.REG.value] == "Unlicensed",
         },
     }
 
@@ -167,7 +175,7 @@ def type_code_programs(df: pd.DataFrame, dropna: bool = False) -> pd.DataFrame:
         masks[m_key] = m_dict
 
     # Create conditions and replacements
-    replacement_conditions: dict[str, "pd.Series[bool]"] = {
+    replacement_conditions: dict[str, pd.Series[bool]] = {
         "CC": (
             (masks[Col.PROV_TYPE]["Licensed Center"])
             & (masks[Col.LIC]["CC"])
@@ -253,7 +261,7 @@ def type_code_programs(df: pd.DataFrame, dropna: bool = False) -> pd.DataFrame:
 
 
 def sda_code_programs(df: pd.DataFrame) -> pd.DataFrame:
-    masks: dict[int, "pd.Series[bool]"] = {}
+    masks: dict[int, pd.Series[bool]] = {}
     for region in RegionEnum:
         val = region.value
         sda = val.sda
