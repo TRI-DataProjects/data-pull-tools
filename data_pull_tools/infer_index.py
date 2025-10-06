@@ -9,8 +9,7 @@ import pandas as pd
 
 class IndexInferrer(ABC):
     @abstractmethod
-    def infer_index(self, df: pd.DataFrame) -> pd.DataFrame | pd.Series:
-        ...
+    def infer_index(self, df: pd.DataFrame) -> pd.DataFrame | pd.Series: ...
 
 
 class CleaningInferrer(IndexInferrer):
@@ -75,7 +74,7 @@ class CleaningInferrer(IndexInferrer):
         return df
 
     def _index_columns_from_repeat_column_names(self, cols_list: list) -> list[int]:
-        index_cols: list[int] = list()
+        index_cols: list[int] = []
 
         # Tally column names
         tally = defaultdict(list)
@@ -97,7 +96,7 @@ class CleaningInferrer(IndexInferrer):
     ) -> tuple[pd.DataFrame, list[int]]:
         pattern = self._pattern
         repl = self._repl
-        index_cols: list[int] = list()
+        index_cols: list[int] = []
 
         cols_df = pd.DataFrame([cols_list], columns=cols_list)
 
@@ -107,7 +106,7 @@ class CleaningInferrer(IndexInferrer):
         cols_df = cols_df.ffill(axis=0)
 
         if pattern is not None:
-            cols_df = cols_df.applymap(lambda x: pattern.sub(repl, x))
+            cols_df = cols_df.map(lambda x: pattern.sub(repl, x))
 
         for idx in range(len(cols_list)):
             data = cols_list[idx]

@@ -3,6 +3,7 @@ Utilities for reading and modifying TOML files.
 
 Includes functions to load TOML files, get or create tables, and update values.
 """
+
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
@@ -28,7 +29,7 @@ Containerish = Container | Table
 
 K = TypeVar("K")
 V = TypeVar("V")
-RecursiveMap = Mapping[K, V | "RecursiveMap[K, V]"]
+RecursiveMap = Mapping[K, "V | RecursiveMap[K, V]"]
 CollisionPolicy = Literal["raise", "replace"]
 DEFAULT_COLLISION_POLICY: CollisionPolicy = "replace"
 
@@ -79,8 +80,7 @@ def load_toml(
         return tomlkit.load(f)
 
 
-class NonTableKeyCollisionError(Exception):
-    ...
+class NonTableKeyCollisionError(Exception): ...
 
 
 def _toml_get_or_table(

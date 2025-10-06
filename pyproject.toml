@@ -1,7 +1,7 @@
 [tool]
 [tool.poetry]
 name = "data_pull_tools"
-version = "0.3.4"
+version = "0.4.0"
 description = ""
 authors = ["John Merkel <dev.genericallyterrible@gmail.com>"]
 readme = "README.md"
@@ -9,25 +9,25 @@ packages = [{ include = "data_pull_tools" }]
 exclude = ["_scripts"]
 
 [tool.poetry.dependencies]
-python = ">=3.11, <3.12"
+python = "^3.11"
 fastparquet = "^2023.4.0"
 ftfy = "^6.1.1"
-ipython = "^8.13.2"
+ipython = "^8.37.0"
 openpyxl = "^3.1.2"
 pandas = "^2.0.1"
-pywin32 = { version = "^306", markers = "sys_platform == \"win32\"" }
 rich = "^13.3.5"
 tomlkit = "^0.11.8"
-platformdirs = "^4.0.0"
+pywin32 = "^311"
+platformdirs = "^4.4.0"
 
 [tool.poetry.group]
 [tool.poetry.group.dev.dependencies]
-poethepoet = "^0.20.0"
-tox = "^4.5.1"
-pre-commit = "^3.3.1"
-pyupgrade = "^3.4.0"
-gitpython = "^3.1.31"
-ruff = "^0.1.6"
+ruff = "^0.13.3"
+poethepoet = "^0.37.0"
+gitpython = "^3.1.45"
+pyupgrade = "^3.20.0"
+pre-commit = "^4.3.0"
+tox = "^4.30.3"
 
 [tool.poetry.group.test.dependencies]
 coverage = { extras = ["toml"], version = "^7.2.5" }
@@ -111,12 +111,11 @@ target-version = "py311" # Minimum python version supported
 src = ["cache_decorators", "tests"]
 select = ["ALL"]
 ignore = [
-    "ANN101", # Missing type annotation for `self` in method
-    "D205",   # 1 blank line required between summary line and description
-    "D401",   # First line of docstring should be in imperative mood
-    "D203",   # `one-blank-line-before-class` (D203) and `no-blank-line-before-class` (D211) are incompatible
-    "D212",   # `multi-line-summary-first-line` (D212) and `multi-line-summary-second-line` (D213) are incompatible
-    "S104",   # Possible binding to all interface
+    "D205", # 1 blank line required between summary line and description
+    "D401", # First line of docstring should be in imperative mood
+    "D203", # `one-blank-line-before-class` (D203) and `no-blank-line-before-class` (D211) are incompatible
+    "D212", # `multi-line-summary-first-line` (D212) and `multi-line-summary-second-line` (D213) are incompatible
+    "S104", # Possible binding to all interface
 ]
 unfixable = ["B"]
 

@@ -1,13 +1,13 @@
-from datetime import datetime, timezone
+from datetime import UTC, datetime, timezone
 
 # TODO: Cache tz for some time (ttl)
 
 
 def system_time_zone() -> timezone:
-    tz = datetime.now(timezone.utc).astimezone().tzinfo
+    tz: timezone = datetime.now(UTC).astimezone().tzinfo  # pyright: ignore[reportAssignmentType]
     if tz is None:
-        tz = timezone.utc
-    return tz  # type: ignore
+        tz = UTC
+    return tz
 
 
 def system_now() -> datetime:
@@ -15,7 +15,7 @@ def system_now() -> datetime:
 
 
 def utc_now() -> datetime:
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
 if __name__ == "__main__":
